@@ -1,5 +1,22 @@
+use std::net::TcpStream;
+use std::process::{Child, Command};
+use std::sync::Mutex;
+
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Manager, RunEvent,
+};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+/// Handle to the spawned Hermes API sidecar so it can be killed on exit.
+struct Sidecar(Mutex<Option<Child>>);
+
+const HOTKEY: &str = "ctrl+shift+v";
+
 /// M1.2 — receive the frame-probe result from the webview, persist it, and
-/// (when SPIKE_AUTOEXIT=1) quit so the spike can run unattended.
+/// (when SPIKE_AUTOEXIT=1) quit so the spike can run unattended. The probe
+/// stays in the app as a startup canary for driver/glvnd regressions (M1.3).
 #[tauri::command]
 fn report_spike(result: String) -> Result<(), String> {
     let path = std::env::var("SPIKE_RESULT_PATH")
@@ -7,7 +24,6 @@ fn report_spike(result: String) -> Result<(), String> {
     std::fs::write(&path, &result).map_err(|e| e.to_string())?;
     println!("SPIKE_RESULT written to {path}\n{result}");
     if std::env::var("SPIKE_AUTOEXIT").as_deref() == Ok("1") {
-        // give the println a moment to flush, then exit cleanly
         std::thread::spawn(|| {
             std::thread::sleep(std::time::Duration::from_millis(500));
             std::process::exit(0);
@@ -16,11 +32,137 @@ fn report_spike(result: String) -> Result<(), String> {
     Ok(())
 }
 
+fn toggle_hud(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        if w.is_visible().unwrap_or(false) {
+            let _ = w.hide();
+        } else {
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }
+}
+
+fn api_port() -> u16 {
+    std::env::var("HERMES_API_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8100)
+}
+
+/// Spawn the Hermes API (uvicorn via uv) unless something already serves the
+/// port. Dev-mode path resolution: the api/ dir sits two levels above this
+/// crate; override with VAULT_API_DIR for packaged builds.
+fn spawn_hermes_api() -> Option<Child> {
+    let port = api_port();
+    if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+        println!("[vault] Hermes API already serving on :{port}, not spawning");
+        return None;
+    }
+    let api_dir = std::env::var("VAULT_API_DIR")
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../../api").to_string());
+    match Command::new("uv")
+        .args([
+            "run",
+            "uvicorn",
+            "vault_api.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+        ])
+        .arg(port.to_string())
+        .current_dir(&api_dir)
+        .spawn()
+    {
+        Ok(child) => {
+            println!("[vault] spawned Hermes API sidecar (pid {}) on :{port}", child.id());
+            Some(child)
+        }
+        Err(e) => {
+            eprintln!("[vault] FAILED to spawn Hermes API from {api_dir}: {e}");
+            None
+        }
+    }
+}
+
+/// This box routes GL/EGL to the NVIDIA card by default — the unfavorable
+/// WebKitGTK path (10fps software render, see docs/M1-decision-2026-07-03.md).
+/// Pin Mesa/RADV before the webview initializes. VAULT_NO_GPU_PIN=1 disables.
+#[cfg(target_os = "linux")]
+fn pin_amd_gl() {
+    if std::env::var_os("VAULT_NO_GPU_PIN").is_some() {
+        return;
+    }
+    for (k, v) in [
+        (
+            "__EGL_VENDOR_LIBRARY_FILENAMES",
+            "/usr/share/glvnd/egl_vendor.d/50_mesa.json",
+        ),
+        ("__GLX_VENDOR_LIBRARY_NAME", "mesa"),
+        ("DRI_PRIME", "1"),
+    ] {
+        if std::env::var_os(k).is_none() {
+            std::env::set_var(k, v);
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    #[cfg(target_os = "linux")]
+    pin_amd_gl();
+
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        toggle_hud(app);
+                    }
+                })
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![report_spike])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .setup(|app| {
+            // tray: toggle + quit (M0.2)
+            let toggle = MenuItem::with_id(app, "toggle", "Show/Hide HUD", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit VAULT", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&toggle, &quit])?;
+            TrayIconBuilder::with_id("vault-tray")
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("VAULT")
+                .menu(&menu)
+                .on_menu_event(|app, e| match e.id.as_ref() {
+                    "toggle" => toggle_hud(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .build(app)?;
+
+            // global hotkey (Wayland compositors may withhold delivery; the
+            // tray toggle is the guaranteed path)
+            match app.global_shortcut().register(HOTKEY) {
+                Ok(()) => println!("[vault] global hotkey registered: {HOTKEY}"),
+                Err(e) => eprintln!("[vault] hotkey registration failed ({HOTKEY}): {e}"),
+            }
+
+            // Hermes API sidecar
+            app.manage(Sidecar(Mutex::new(spawn_hermes_api())));
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app, event| {
+        if let RunEvent::Exit = event {
+            if let Some(state) = app.try_state::<Sidecar>() {
+                if let Some(mut child) = state.0.lock().unwrap().take() {
+                    println!("[vault] stopping Hermes API sidecar (pid {})", child.id());
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+        }
+    });
 }

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     obsidian_rest_url: str = "http://127.0.0.1:27123"
     obsidian_rest_api_key: str = ""
 
+    # M2.2 RAG — local embeddings only (PRD §3.4)
+    rag_data_dir: Path = PROJECT_ROOT / ".tmp/rag"
+    ollama_url: str = "http://localhost:11434"
+    embed_model: str = "nomic-embed-text"
+
     worker_r9700_url: str = "http://127.0.0.1:8081/v1"
     worker_7900xtx_url: str = "http://127.0.0.1:8082/v1"
 

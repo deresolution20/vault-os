@@ -9,6 +9,8 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
+    "httpx>=0.28.1",
+    "obsidian-notes-rag>=1.1.2",
     "pydantic>=2.7",
     "pydantic-settings>=2.14.2",
     "python-dotenv>=1.2.2",
