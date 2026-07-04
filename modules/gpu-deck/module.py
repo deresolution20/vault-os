@@ -40,6 +40,36 @@ _history: list[dict] = []  # most recent first
 _task_events: dict[str, list[dict]] = {}
 TASK_EVENT_CAP = 500
 
+# history + transcripts survive API restarts (regenerable → .tmp)
+from vault_api.config import PROJECT_ROOT  # noqa: E402
+
+PERSIST_PATH = PROJECT_ROOT / ".tmp/gpu-deck-history.json"
+
+
+def _save() -> None:
+    try:
+        PERSIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+        import json
+
+        PERSIST_PATH.write_text(
+            json.dumps({"history": _history, "taskEvents": _task_events})
+        )
+    except OSError as e:
+        print(f"[gpu-deck] persist failed: {e}")
+
+
+def _load() -> None:
+    try:
+        import json
+
+        data = json.loads(PERSIST_PATH.read_text())
+        _history.extend(data.get("history", [])[:HISTORY_LIMIT])
+        _task_events.update(data.get("taskEvents", {}))
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError) as e:
+        print(f"[gpu-deck] history load failed: {e}")
+
 
 def _record(task_id: str, event) -> None:
     log = _task_events.setdefault(task_id, [])
@@ -75,6 +105,7 @@ async def _on_event(event) -> None:
         for tid in list(_task_events):
             if tid not in keep:
                 del _task_events[tid]
+        _save()
 
 
 # ── GPU hardware truth (sysfs + nvidia-smi) ─────────────────────────────
@@ -238,7 +269,7 @@ async def _plane_chain(task_id: str) -> dict:
                     "issue": match["name"],
                     "state": match.get("state"),
                     "url": (
-                        f"{settings.plane_api_url.rstrip('/')}/"
+                        f"{(settings.plane_web_url or settings.plane_api_url).rstrip('/')}/"
                         f"{settings.plane_workspace_slug}/projects/"
                         f"{settings.plane_project_id}/issues/{match['id']}"
                     ),
@@ -305,6 +336,7 @@ async def worker_control(unit: str, action: str) -> dict:
 
 
 def register(registry: ModuleRegistry, bus: EventBus) -> None:
+    _load()
     bus.subscribe(_on_event)
     registry.register(
         Module(

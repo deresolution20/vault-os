@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
 
     plane_api_url: str = ""
+    # browser-facing origin for issue links — the one Brice is signed into
+    # (session cookies don't cross localhost vs LAN-IP origins)
+    plane_web_url: str = ""
     plane_api_token: str = ""
     plane_workspace_slug: str = ""
     plane_project_id: str = ""
