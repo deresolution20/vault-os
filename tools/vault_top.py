@@ -436,6 +436,8 @@ class VaultTop(App):
             )
         elif line.startswith("/ask "):
             self.ask_router(line[5:])
+        elif line == "/reset-cloud":
+            self.reset_cloud()
         elif line.startswith("/"):
             self._log_line(Text(f"unknown command: {line}", style=RED))
         else:
@@ -488,6 +490,27 @@ class VaultTop(App):
             self.call_from_thread(
                 self._log_line, Text(f"ask failed: {e}", style=RED)
             )
+
+    @work(thread=True, group="dispatch")
+    def reset_cloud(self) -> None:
+        """/reset-cloud — zero the cloud-orchestrator token window."""
+        try:
+            r = requests.post(
+                f"{self.api}/modules/gpu-deck/cloud-reset",
+                headers=self.headers,
+                timeout=10,
+            )
+            r.raise_for_status()
+            n = r.json().get("cleared", 0)
+            self.call_from_thread(
+                self._log_line,
+                Text(f"cloud window reset — {n} records archived", style=AMBER),
+            )
+        except requests.RequestException as e:
+            self.call_from_thread(
+                self._log_line, Text(f"reset failed: {e}", style=RED)
+            )
+        self.refresh_state()
 
     def action_cancel_task(self) -> None:
         if not self.active_task:

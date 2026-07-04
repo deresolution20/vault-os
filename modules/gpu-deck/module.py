@@ -507,6 +507,21 @@ async def cloud_live() -> dict:
     return {"inFlight": in_flight}
 
 
+@router.post("/cloud-reset")
+async def cloud_reset() -> dict:
+    """Zero the cloud-orchestrator window (testing). The current stats file
+    is archived to *.jsonl.1 rather than destroyed."""
+    cleared = 0
+    try:
+        lines = CLOUD_STATS.read_text().splitlines()
+        cleared = len(lines)
+        CLOUD_STATS.with_suffix(".jsonl.1").write_text("\n".join(lines) + "\n")
+        CLOUD_STATS.write_text("")
+    except FileNotFoundError:
+        pass
+    return {"cleared": cleared, "archivedTo": str(CLOUD_STATS) + ".1"}
+
+
 @router.get("/task/{task_id}")
 async def task_detail(task_id: str) -> dict:
     """Drill-down: a task's info, Plane chain, and full event transcript."""
