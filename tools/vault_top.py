@@ -553,28 +553,49 @@ class VaultTop(App):
                     )
                 )
             self._log_line(
-                Text("   switch: /model <n>   (r9700; more GPUs soon)",
-                     style="dim")
+                Text("   switch: /model <n>  or  /model <gpu> <n>   "
+                     "(gpus: r9700, 7900xtx)", style="dim")
             )
 
         self.call_from_thread(show)
 
     @work(thread=True, group="dispatch")
     def switch_model(self, arg: str) -> None:
-        """/model <n> — switch the R9700 worker to catalog entry n."""
+        """/model <n> or /model <gpu> <n> — set a card's worker model."""
         catalog = getattr(self, "model_catalog", None)
         if not catalog:
             self.call_from_thread(
                 self._log_line, Text("run /models first", style=RED)
             )
             return
+        tokens = arg.split()
+        gpu = "r9700"
+        if len(tokens) == 2:
+            gpu, sel = tokens
+        else:
+            sel = tokens[0] if tokens else ""
+        known_gpus = {w["gpu"] for w in self.state.get("workers", [])}
+        if gpu not in known_gpus:
+            self.call_from_thread(
+                self._log_line,
+                Text(f"unknown gpu '{gpu}' — one of: {', '.join(sorted(known_gpus))}",
+                     style=RED),
+            )
+            return
+        installed = {g["id"] for g in self.state.get("gpus", [])}
+        if gpu not in installed:
+            self.call_from_thread(
+                self._log_line,
+                Text(f"{gpu} isn't installed yet — selection will apply when "
+                     "the card lands", style=AMBER),
+            )
         try:
-            m = catalog[int(arg)]
+            m = catalog[int(sel)]
         except (ValueError, IndexError):
-            m = next((x for x in catalog if x["name"] == arg), None)
+            m = next((x for x in catalog if x["name"] == sel), None)
         if m is None:
             self.call_from_thread(
-                self._log_line, Text(f"unknown model: {arg}", style=RED)
+                self._log_line, Text(f"unknown model: {sel}", style=RED)
             )
             return
         if not m["loadable"]:
@@ -586,12 +607,12 @@ class VaultTop(App):
             return
         self.call_from_thread(
             self._log_line,
-            Text(f"switching r9700 → {m['name']} ({m['sizeGB']}GB, loads in "
+            Text(f"switching {gpu} → {m['name']} ({m['sizeGB']}GB, loads in "
                  "~10-40s)…", style=AMBER),
         )
         try:
             r = requests.post(
-                f"{self.api}/modules/gpu-deck/workers/vault-worker-r9700/model",
+                f"{self.api}/modules/gpu-deck/workers/vault-worker-{gpu}/model",
                 headers=self.headers,
                 json={"path": m["path"], "alias": m["name"]},
                 timeout=30,
@@ -800,13 +821,26 @@ class VaultTop(App):
             w = workers.get(g["id"])
             if w:
                 if w.get("up"):
+                    out.append(f"  ├─ [F{i + 1}] vault-worker ", style=GREEN)
+                    out.append("● ", style=GREEN)
                     out.append(
-                        f"  ├─ [F{i + 1}] vault-worker ● {w.get('model')} · "
-                        f"{w.get('activeSlots', 0)} slot(s)\n",
-                        style=GREEN,
+                        f"{w.get('model')}", style=f"bold {MAGENTA}"
+                    )
+                    out.append(
+                        f" · {w.get('activeSlots', 0)} slot(s)\n", style=GREEN
                     )
                 else:
-                    out.append(f"  ├─ [F{i + 1}] vault-worker ○ down\n", style="dim")
+                    out.append(f"  ├─ [F{i + 1}] vault-worker ○ down", style="dim")
+                    out.append("  ⭘ next: ", style="dim")
+                    out.append(
+                        f"{w.get('selectedModel', '?')}\n",
+                        style=MAGENTA,
+                    )
+            else:
+                out.append(
+                    "  └─ no vault worker (display / ollama card)\n",
+                    style="dim",
+                )
         for m in s.get("ollama", []):
             out.append(
                 f"  ollama · {m['model']} · {m['vramGB']}GB vram\n",

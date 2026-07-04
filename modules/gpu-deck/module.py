@@ -345,14 +345,33 @@ def _nvidia_gpus() -> list[dict]:
 
 WORKERS = [
     {"id": "r9700-worker", "gpu": "r9700", "url": settings.worker_r9700_url,
-     "unit": "vault-worker-r9700"},
+     "unit": "vault-worker-r9700", "defaultModel": "qwen3-32b"},
     {"id": "7900xtx-worker", "gpu": "7900xtx", "url": settings.worker_7900xtx_url,
-     "unit": "vault-worker-7900xtx"},
+     "unit": "vault-worker-7900xtx", "defaultModel": "(pick with /model)"},
 ]
 
 
+def _selected_model(gpu: str, default: str) -> str:
+    """The model this worker will load on next start (sticky selection)."""
+    import json
+
+    try:
+        sel = json.loads(
+            (PROJECT_ROOT / f".tmp/worker-{gpu}.model").read_text()
+        )
+        return sel.get("alias") or default
+    except (FileNotFoundError, ValueError):
+        return default
+
+
 async def _worker_state(w: dict) -> dict:
-    state = {"id": w["id"], "gpu": w["gpu"], "unit": w["unit"], "up": False}
+    state = {
+        "id": w["id"],
+        "gpu": w["gpu"],
+        "unit": w["unit"],
+        "up": False,
+        "selectedModel": _selected_model(w["gpu"], w["defaultModel"]),
+    }
     base = w["url"].rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=2.0) as c:
@@ -641,13 +660,19 @@ async def set_worker_model(unit: str, sel: ModelSelect) -> dict:
     sel_file = PROJECT_ROOT / f".tmp/worker-{worker['gpu']}.model"
     sel_file.parent.mkdir(parents=True, exist_ok=True)
     sel_file.write_text(json.dumps({"path": sel.path, "alias": sel.alias}))
-    # restart (or start) the worker with the new selection
+    # restart (or start) the worker with the new selection; a missing unit
+    # (card not installed yet) still keeps the sticky selection
     subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True)
     p2 = subprocess.run(
         ["systemctl", "--user", "start", unit], capture_output=True, text=True
     )
     if p2.returncode != 0:
-        raise HTTPException(500, p2.stderr.strip()[:200])
+        return {
+            "unit": unit,
+            "model": sel.alias,
+            "restarted": False,
+            "note": f"selection saved; start failed: {p2.stderr.strip()[:150]}",
+        }
     return {"unit": unit, "model": sel.alias, "restarted": True}
 
 
