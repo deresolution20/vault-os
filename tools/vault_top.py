@@ -275,8 +275,8 @@ class VaultTop(App):
             RichLog(id="transcript", markup=False, wrap=True, max_lines=500),
         )
         yield Input(
-            placeholder="›  /run <cmd> · /hermes <prompt> · /ask <prompt> · "
-            "/cancel · Tab to navigate",
+            placeholder="›  text=local ask · /hermes slim · /hermes! full · "
+            "/run <cmd> · /cancel",
             id="prompt",
         )
         yield Footer()
@@ -410,17 +410,27 @@ class VaultTop(App):
             # k9s-style: Enter on an empty prompt drills into the selection
             self.action_drill()
             return
+        hermes_bin = str(Path.home() / ".hermes/hermes-agent/venv/bin/hermes")
         if line in ("/quit", "/q"):
             self.exit()
         elif line == "/cancel":
             self.action_cancel_task()
         elif line.startswith("/run "):
             self._dispatch_run(shlex.split(line[5:]), title=line[5:][:60])
+        elif line.startswith("/hermes! "):
+            # full profile: all toolsets + rules/memory (~12.5k tok overhead)
+            prompt = line[9:]
+            self._dispatch_run(
+                [hermes_bin, "-z", prompt],
+                title=f"hermes!: {prompt[:50]}",
+                worker="hermes",
+            )
         elif line.startswith("/hermes "):
+            # slim profile: no rules/memory injection, web toolset only —
+            # cuts the fixed prompt overhead for quick chats
             prompt = line[8:]
             self._dispatch_run(
-                [str(Path.home() / ".hermes/hermes-agent/venv/bin/hermes"),
-                 "-z", prompt],
+                [hermes_bin, "--ignore-rules", "-t", "web", "-z", prompt],
                 title=f"hermes: {prompt[:50]}",
                 worker="hermes",
             )
@@ -429,13 +439,9 @@ class VaultTop(App):
         elif line.startswith("/"):
             self._log_line(Text(f"unknown command: {line}", style=RED))
         else:
-            # bare text talks to the orchestrator, Claude Code style
-            self._dispatch_run(
-                [str(Path.home() / ".hermes/hermes-agent/venv/bin/hermes"),
-                 "-z", line],
-                title=f"hermes: {line[:50]}",
-                worker="hermes",
-            )
+            # bare text = quick question → LOCAL model router (free tokens);
+            # cloud kimi is reserved for /hermes orchestration
+            self.ask_router(line)
 
     @work(thread=True, group="dispatch")
     def _dispatch_run(self, cmd: list[str], title: str, worker: str = "operator") -> None:
