@@ -47,3 +47,4 @@ own inference, not a build workforce).
 | M7.1 | Module contract defined + one loaded example | medium | **done 2026-07-04** — contract + filesystem discovery + 4 loaded modules | — | example module = M7.3 |
 | M7.2 | Refactor RAG/write/serving/telemetry as modules | medium | todo | M7.1, M4, M5, M6 | |
 | M7.3 | hello-module stub (route + event + panel, drop-in proof) | easy | **done 2026-07-04** — hello-module: route+event+panel, zero core edits, tested | M7.1 | |
+| X1 | gpu-deck: /workflows-style mission control (HUD panel + window + vault-top TUI) | medium | **done 2026-07-04** — live-verified: per-GPU truth, ollama residency, running tasks w/ Plane chain, history, light controls | M6.1, M6.2 | Brice-requested 2026-07-04; spec via Q&A |

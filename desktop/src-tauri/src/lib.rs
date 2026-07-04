@@ -87,6 +87,26 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// gpu-deck — open the full mission-control tree in its own window.
+#[tauri::command]
+fn open_deck(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("deck") {
+        w.show().and_then(|_| w.set_focus()).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    let url = if cfg!(debug_assertions) {
+        tauri::WebviewUrl::External("http://localhost:1420/#deck".parse().unwrap())
+    } else {
+        tauri::WebviewUrl::App("index.html#deck".into())
+    };
+    tauri::WebviewWindowBuilder::new(&app, "deck", url)
+        .title("VAULT · GPU DECK")
+        .inner_size(860.0, 640.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// M6.3 — open the Grafana dashboard in its own webview window. Grafana
 /// Cloud sends X-Frame-Options: deny (no iframes, even public dashboards);
 /// a child window sidesteps that. URL comes from the project .env only —
@@ -208,7 +228,8 @@ pub fn run() {
             get_config,
             read_note,
             quit_app,
-            open_vitals
+            open_vitals,
+            open_deck
         ])
         .setup(|app| {
             // tray: toggle + quit (M0.2)

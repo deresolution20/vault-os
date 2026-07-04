@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# vault-top — terminal GPU deck (Textual). Same data/controls as the window.
+exec uv run --with textual --with requests \
+  python3 "$(dirname "${BASH_SOURCE[0]}")/vault_top.py" "$@"

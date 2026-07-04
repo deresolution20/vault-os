@@ -1,0 +1,84 @@
+.deck-root {
+  min-height: 100vh;
+  background: #04060c;
+  color: #cfe8f5;
+  font-family: "JetBrains Mono", "Fira Mono", monospace;
+  font-size: 13px;
+  padding: 18px 22px;
+  line-height: 1.7;
+}
+
+.deck-title {
+  color: #ffb347;
+  letter-spacing: 0.3em;
+  margin-bottom: 14px;
+  text-shadow: 0 0 8px rgba(255, 179, 71, 0.35);
+}
+
+.deck-gpu-head {
+  color: #00e5ff;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+}
+
+.deck-vram {
+  color: #7ddcff;
+  font-size: 11px;
+}
+
+.deck-line {
+  padding-left: 12px;
+  white-space: pre-wrap;
+}
+
+.deck-plane {
+  padding-left: 26px;
+  color: #ff2bd6;
+  font-size: 12px;
+}
+
+.deck-plane a {
+  color: #00e5ff;
+}
+
+.deck-section {
+  margin-top: 12px;
+}
+
+.deck-head {
+  color: #ffb347;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  opacity: 0.9;
+}
+
+.deck-dim {
+  opacity: 0.5;
+}
+
+.deck-err {
+  color: #ff5f56;
+  margin-top: 10px;
+}
+
+.ok {
+  color: #7ddc8a;
+}
+
+.bad {
+  color: #ff5f56;
+}
+
+.deck-btn {
+  background: none;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: #00e5ff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 1px 8px;
+  margin-left: 6px;
+}
+
+.deck-btn:hover {
+  background: rgba(0, 229, 255, 0.12);
+}

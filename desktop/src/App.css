@@ -135,6 +135,15 @@ body,
   background: rgba(0, 229, 255, 0.12);
 }
 
+.gpu-deck-mini {
+  cursor: pointer;
+}
+
+.deck-mini-line {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
 /* ── note side panel ──────────────────────────────────────────────────── */
 .note-panel {
   position: fixed;
