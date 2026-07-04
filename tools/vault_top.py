@@ -26,7 +26,8 @@ import requests
 from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Vertical
+from textual.binding import Binding
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Input, RichLog, Static
 
@@ -60,10 +61,12 @@ class TaskScreen(Screen):
         self.detail: dict = {}
 
     def compose(self) -> ComposeResult:
-        yield Static(id="detail")
+        yield VerticalScroll(Static(id="detail"))
         yield Footer()
 
     def on_mount(self) -> None:
+        # focus the scroll container so arrows/PgUp/PgDn scroll the transcript
+        self.query_one(VerticalScroll).focus()
         self.set_interval(2.0, self.refresh_detail)
         self.refresh_detail()
 
@@ -106,7 +109,7 @@ class TaskScreen(Screen):
             out.append(f"  {p.get('reason', 'unplanned')}\n\n", style="dim")
         events = d.get("events", [])
         out.append(f"TRANSCRIPT · {len(events)} events\n", style=f"bold {AMBER}")
-        for e in events[-40:]:
+        for e in events[-200:]:
             stamp = time.strftime("%H:%M:%S", time.localtime(e.get("ts", 0)))
             out.append(f"  {stamp} ", style="dim")
             if e["type"] == "log":
@@ -130,9 +133,10 @@ class VaultTop(App):
         ("escape", "cancel_task", "cancel task"),
         ("f1", "toggle_worker(0)", "worker 1"),
         ("f2", "toggle_worker(1)", "worker 2"),
-        ("o", "open_issue", "open in Plane"),
-        ("up", "move(-1)", "select ↑"),
-        ("down", "move(1)", "select ↓"),
+        ("ctrl+o", "open_issue", "open in Plane"),
+        # priority: selection must work even while the prompt Input has focus
+        Binding("up", "move(-1)", "select ↑", priority=True),
+        Binding("down", "move(1)", "select ↓", priority=True),
         ("enter", "drill", "drill down"),
     ]
     CSS = f"""
@@ -270,6 +274,8 @@ class VaultTop(App):
         line = event.value.strip()
         event.input.value = ""
         if not line:
+            # k9s-style: Enter on an empty prompt drills into the selection
+            self.action_drill()
             return
         if line in ("/quit", "/q"):
             self.exit()
@@ -376,8 +382,8 @@ class VaultTop(App):
 
     def action_drill(self) -> None:
         tasks = self._tasks()
-        if tasks and not self.query_one("#prompt", Input).has_focus:
-            self.push_screen(TaskScreen(tasks[self.cursor]["taskId"]))
+        if tasks:
+            self.push_screen(TaskScreen(tasks[self.cursor % len(tasks)]["taskId"]))
 
     def action_toggle_worker(self, idx: int) -> None:
         workers = self.state.get("workers", [])

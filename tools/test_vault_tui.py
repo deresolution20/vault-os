@@ -58,6 +58,25 @@ async def main() -> int:
                 break
         assert app.active_task is None, "cancel did not clear active task"
         print(f"✓ esc-interrupt cancelled {tid}")
+
+        # navigation: arrows move the selection even with the prompt focused
+        await pilot.pause(1.0)
+        before = app.cursor
+        await pilot.press("down")
+        assert app.cursor != before or len(app._tasks()) <= 1, "cursor stuck"
+        print("✓ arrow selection works with prompt focused")
+
+        # empty-Enter drills into the selected task; Esc pops back
+        await pilot.press("enter")
+        await pilot.pause(0.8)
+        from vault_top import TaskScreen
+
+        assert isinstance(app.screen, TaskScreen), f"no drill: {app.screen}"
+        print("✓ empty-Enter drilled into", app.screen.task_id)
+        await pilot.press("escape")
+        await pilot.pause(0.3)
+        assert not isinstance(app.screen, TaskScreen), "esc didn't pop"
+        print("✓ esc popped back to deck")
     return 0
 
 
