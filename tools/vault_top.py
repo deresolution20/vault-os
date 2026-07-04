@@ -438,6 +438,10 @@ class VaultTop(App):
             self.ask_router(line[5:])
         elif line == "/reset-cloud":
             self.reset_cloud()
+        elif line == "/models":
+            self.list_models()
+        elif line.startswith("/model "):
+            self.switch_model(line[7:].strip())
         elif line == "/reset-ledger":
             self.reset_ledger()
         elif line == "/clear":
@@ -515,6 +519,92 @@ class VaultTop(App):
         except requests.RequestException as e:
             self.call_from_thread(
                 self._log_line, Text(f"reset failed: {e}", style=RED)
+            )
+        self.refresh_state()
+
+    @work(thread=True, group="dispatch")
+    def list_models(self) -> None:
+        """/models — catalog of local GGUFs usable by the workers."""
+        try:
+            r = requests.get(
+                f"{self.api}/modules/gpu-deck/models",
+                headers=self.headers,
+                timeout=15,
+            )
+            r.raise_for_status()
+            self.model_catalog = r.json()["models"]
+        except requests.RequestException as e:
+            self.call_from_thread(
+                self._log_line, Text(f"models failed: {e}", style=RED)
+            )
+            return
+
+        def show() -> None:
+            self._log_line(Text("MODELS (local GGUFs):", style=f"bold {AMBER}"))
+            for i, m in enumerate(self.model_catalog):
+                mark = "  " if m["loadable"] else "✗ "
+                style = "#cfe8f5" if m["loadable"] else "dim"
+                note = "" if m["loadable"] else " (arch unsupported by llama.cpp)"
+                self._log_line(
+                    Text(
+                        f" {mark}[{i}] {m['name']} · {m['sizeGB']}GB · "
+                        f"{m['arch']}{note}",
+                        style=style,
+                    )
+                )
+            self._log_line(
+                Text("   switch: /model <n>   (r9700; more GPUs soon)",
+                     style="dim")
+            )
+
+        self.call_from_thread(show)
+
+    @work(thread=True, group="dispatch")
+    def switch_model(self, arg: str) -> None:
+        """/model <n> — switch the R9700 worker to catalog entry n."""
+        catalog = getattr(self, "model_catalog", None)
+        if not catalog:
+            self.call_from_thread(
+                self._log_line, Text("run /models first", style=RED)
+            )
+            return
+        try:
+            m = catalog[int(arg)]
+        except (ValueError, IndexError):
+            m = next((x for x in catalog if x["name"] == arg), None)
+        if m is None:
+            self.call_from_thread(
+                self._log_line, Text(f"unknown model: {arg}", style=RED)
+            )
+            return
+        if not m["loadable"]:
+            self.call_from_thread(
+                self._log_line,
+                Text(f"{m['name']} uses arch '{m['arch']}' — llama.cpp can't "
+                     "load it", style=RED),
+            )
+            return
+        self.call_from_thread(
+            self._log_line,
+            Text(f"switching r9700 → {m['name']} ({m['sizeGB']}GB, loads in "
+                 "~10-40s)…", style=AMBER),
+        )
+        try:
+            r = requests.post(
+                f"{self.api}/modules/gpu-deck/workers/vault-worker-r9700/model",
+                headers=self.headers,
+                json={"path": m["path"], "alias": m["name"]},
+                timeout=30,
+            )
+            r.raise_for_status()
+            self.call_from_thread(
+                self._log_line,
+                Text(f"worker restarting with {m['name']} — watch the deck",
+                     style=GREEN),
+            )
+        except requests.RequestException as e:
+            self.call_from_thread(
+                self._log_line, Text(f"switch failed: {e}", style=RED)
             )
         self.refresh_state()
 
@@ -617,15 +707,32 @@ class VaultTop(App):
         if idx >= len(workers):
             return
         w = workers[idx]
-        action = "stop" if w.get("up") else "start"
-        try:
-            requests.post(
-                f"{self.api}/modules/gpu-deck/workers/{w['unit']}/{action}",
-                headers=self.headers,
-                timeout=10,
+        gpus = {g["id"] for g in self.state.get("gpus", [])}
+        if w["gpu"] not in gpus:
+            self._log_line(
+                Text(
+                    f"{w['gpu']} isn't installed yet — F{idx + 1} activates "
+                    "when the card lands",
+                    style=AMBER,
+                )
             )
-        except requests.RequestException:
-            pass
+            return
+        action = "stop" if w.get("up") else "start"
+        self._toggle_worker(w["unit"], action)
+
+    @work(thread=True, group="dispatch")
+    def _toggle_worker(self, unit: str, action: str) -> None:
+        try:
+            r = requests.post(
+                f"{self.api}/modules/gpu-deck/workers/{unit}/{action}",
+                headers=self.headers,
+                timeout=15,
+            )
+            r.raise_for_status()
+            msg, style = f"{unit}: {action} ok", GREEN
+        except requests.RequestException as e:
+            msg, style = f"{unit}: {action} failed — {e}", RED
+        self.call_from_thread(self._log_line, Text(msg, style=style))
         self.refresh_state()
 
     def action_open_issue(self) -> None:

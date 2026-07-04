@@ -15,10 +15,12 @@ import asyncio
 import glob
 import subprocess
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 
 import httpx
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from vault_api.bus import EventBus
 from vault_api.config import settings
@@ -536,6 +538,117 @@ async def task_detail(task_id: str) -> dict:
         "plane": await _plane_chain(task_id),
         "events": _task_events.get(task_id, []),
     }
+
+
+# ── model catalog + switcher ─────────────────────────────────────────────
+
+OLLAMA_STORES = [Path("/var/lib/ollama-r9700/models")]
+# archs the bundled llama.cpp (b9870) cannot load (ollama-fork additions)
+UNSUPPORTED_ARCHS = {"qwen35", "qwen35moe"}
+
+
+def _gguf_arch(path: Path) -> str:
+    """Read general.architecture from a GGUF header (first KV is usually it)."""
+    import struct
+
+    try:
+        with path.open("rb") as f:
+            head = f.read(65536)
+        if head[:4] != b"GGUF":
+            return "?"
+        # search the header window for the arch key and read the string after
+        idx = head.find(b"general.architecture")
+        if idx < 0:
+            return "?"
+        off = idx + len(b"general.architecture")
+        vtype = struct.unpack_from("<I", head, off)[0]
+        if vtype != 8:  # GGUF string
+            return "?"
+        slen = struct.unpack_from("<Q", head, off + 4)[0]
+        return head[off + 12 : off + 12 + min(slen, 32)].decode(errors="replace")
+    except (OSError, struct.error):
+        return "?"
+
+
+def _model_catalog() -> list[dict]:
+    import json
+
+    out = []
+    for store in OLLAMA_STORES:
+        manifests = store / "manifests/registry.ollama.ai"
+        if not manifests.is_dir():
+            continue
+        for mf in manifests.rglob("*"):
+            if not mf.is_file():
+                continue
+            try:
+                data = json.loads(mf.read_text())
+                layer = next(
+                    (
+                        l
+                        for l in (data.get("layers") or [])
+                        if "model" in (l.get("mediaType") or "")
+                    ),
+                    None,
+                )
+                if not layer:
+                    continue
+                blob = store / "blobs" / layer["digest"].replace(":", "-")
+                if not blob.is_file():
+                    continue  # cloud model or partial
+                rel = mf.relative_to(manifests).parts
+                name = (
+                    f"{rel[-2]}:{rel[-1]}"
+                    if rel[0] == "library"
+                    else f"{'/'.join(rel[:-1])}:{rel[-1]}"
+                )
+                arch = _gguf_arch(blob)
+                out.append(
+                    {
+                        "name": name,
+                        "path": str(blob),
+                        "sizeGB": round(layer["size"] / 1e9, 1),
+                        "arch": arch,
+                        "loadable": arch not in UNSUPPORTED_ARCHS,
+                    }
+                )
+            except (ValueError, OSError):
+                continue
+    return sorted(out, key=lambda m: m["name"])
+
+
+@router.get("/models")
+async def models() -> dict:
+    return {"models": _model_catalog()}
+
+
+class ModelSelect(BaseModel):
+    path: str
+    alias: str
+
+
+@router.post("/workers/{unit}/model")
+async def set_worker_model(unit: str, sel: ModelSelect) -> dict:
+    """Switch a worker's model: persist the selection, restart the unit."""
+    import json
+
+    worker = next((w for w in WORKERS if w["unit"] == unit), None)
+    if worker is None:
+        raise HTTPException(400, f"unknown unit {unit}")
+    p = Path(sel.path)
+    if not (p.is_file() and p.open("rb").read(4) == b"GGUF"):
+        raise HTTPException(400, f"not a readable GGUF: {sel.path}")
+    sel_file = PROJECT_ROOT / f".tmp/worker-{worker['gpu']}.model"
+    sel_file.parent.mkdir(parents=True, exist_ok=True)
+    sel_file.write_text(json.dumps({"path": sel.path, "alias": sel.alias}))
+    # restart (or start) the worker with the new selection
+    subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True)
+    p2 = subprocess.run(
+        ["systemctl", "--user", "start", unit], capture_output=True, text=True
+    )
+    if p2.returncode != 0:
+        raise HTTPException(500, p2.stderr.strip()[:200])
+    return {"unit": unit, "model": sel.alias, "restarted": True}
 
 
 @router.post("/workers/{unit}/{action}")

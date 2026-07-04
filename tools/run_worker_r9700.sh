@@ -18,6 +18,18 @@ PORT="${WORKER_R9700_PORT:-8081}"
 # model is chosen.
 MODEL="${MODEL_R9700:-/var/lib/ollama-r9700/models/blobs/sha256-a27a92cf139a68efcbb267c6af6d20bb8f3feddc700f3b03cd8d41f4dc443348}"
 ALIAS="${MODEL_R9700_ALIAS:-qwen3-32b}"
+
+# Runtime model switch (gpu-deck /model command) overrides everything:
+# .tmp/worker-r9700.model is JSON {"path": ..., "alias": ...}
+ROOT_TMP_SEL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.tmp/worker-r9700.model"
+if [ -f "$ROOT_TMP_SEL" ]; then
+  SEL_PATH=$(python3 -c "import json;print(json.load(open('$ROOT_TMP_SEL'))['path'])" 2>/dev/null || true)
+  SEL_ALIAS=$(python3 -c "import json;print(json.load(open('$ROOT_TMP_SEL'))['alias'])" 2>/dev/null || true)
+  if [ -n "$SEL_PATH" ] && [ -r "$SEL_PATH" ]; then
+    MODEL="$SEL_PATH"
+    ALIAS="${SEL_ALIAS:-selected}"
+  fi
+fi
 CTX="${MODEL_R9700_CTX:-32768}"
 MIN_FREE_GB=18
 
