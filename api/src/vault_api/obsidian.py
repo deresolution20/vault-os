@@ -18,10 +18,13 @@ class ObsidianUnavailable(Exception):
 
 
 def _client() -> httpx.AsyncClient:
+    # verify=False: the plugin serves HTTPS on loopback with a self-signed
+    # cert; the bearer key authenticates and traffic never leaves the box.
     return httpx.AsyncClient(
         base_url=settings.obsidian_rest_url,
         headers={"Authorization": f"Bearer {settings.obsidian_rest_api_key}"},
         timeout=5.0,
+        verify=False,
     )
 
 
