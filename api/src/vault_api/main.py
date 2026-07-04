@@ -149,6 +149,28 @@ async def patch_note(path: str, patch: NotePatch) -> dict:
     return {"path": path, "patched": True}
 
 
+class CompletionRequest(BaseModel):
+    messages: list[dict]
+    difficulty: str = "easy"
+    max_tokens: int = 1024
+
+
+@app.post("/llm/complete", dependencies=[auth_required])
+async def llm_complete(req: CompletionRequest) -> dict:
+    """M5.2/M5.3 — route to a local lane by difficulty; paid fallback."""
+    from .router import model_router
+
+    return await model_router.complete(req.messages, req.difficulty, req.max_tokens)
+
+
+@app.get("/llm/ledger", dependencies=[auth_required])
+async def llm_ledger() -> dict:
+    """M5.3 — token-savings ledger (local vs paid)."""
+    from .router import model_router
+
+    return model_router.ledger.as_dict()
+
+
 @app.post("/events", status_code=202, dependencies=[auth_required])
 async def ingest_event(event: dict) -> dict:
     """M6.1 — agents push task_start/file_diff/log/task_done here; the bus
