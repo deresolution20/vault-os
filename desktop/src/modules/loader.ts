@@ -11,16 +11,19 @@ const panelModules = import.meta.glob("./*/Panel.tsx") as Record<
   () => Promise<{ default: ComponentType<PanelProps> }>
 >;
 
-export interface PanelProps {
-  /** events from the shared WS bus, filtered to this module's source id */
-  events: import("@vault/shared/events").VaultEvent[];
-}
-
 export interface ModuleManifestEntry {
   id: string;
   name: string;
   eventTypes: string[];
   panel: string | null;
+  config?: Record<string, unknown>;
+}
+
+export interface PanelProps {
+  /** events from the shared WS bus, filtered to this module's source id */
+  events: import("@vault/shared/events").VaultEvent[];
+  /** this module's manifest entry (id, name, config) */
+  module?: ModuleManifestEntry;
 }
 
 /** panel id → lazy component (id = folder name) */

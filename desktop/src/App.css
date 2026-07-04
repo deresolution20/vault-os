@@ -121,6 +121,13 @@ body,
   letter-spacing: 0.1em;
 }
 
+.grafana-frame {
+  width: 300px;
+  height: 160px;
+  border: none;
+  background: transparent;
+}
+
 /* ── note side panel ──────────────────────────────────────────────────── */
 .note-panel {
   position: fixed;

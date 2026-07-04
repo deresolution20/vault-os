@@ -142,7 +142,7 @@ export default function App() {
             const Panel = panelRegistry[m.panel!];
             return (
               <Suspense key={m.id} fallback={null}>
-                <Panel events={moduleEvents[m.id] ?? []} />
+                <Panel events={moduleEvents[m.id] ?? []} module={m} />
               </Suspense>
             );
           })}

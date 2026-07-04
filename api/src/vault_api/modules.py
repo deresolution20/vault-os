@@ -26,6 +26,7 @@ class Module:
     router: APIRouter | None = None  # (a) REST routes
     event_types: list[str] = field(default_factory=list)  # (b) WS events emitted
     panel: str | None = None  # (c) front-end panel component id
+    config: dict = field(default_factory=dict)  # panel bootstrap config
     # optional lifecycle hooks (indexer watch loops, worker health checks, ...)
     on_startup: Callable[[], Awaitable[None]] | None = None
     on_shutdown: Callable[[], Awaitable[None]] | None = None
@@ -61,6 +62,7 @@ class ModuleRegistry:
                 "name": m.name,
                 "eventTypes": m.event_types,
                 "panel": m.panel,
+                "config": m.config,
             }
             for m in self._modules.values()
         ]
