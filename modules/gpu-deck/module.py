@@ -250,7 +250,9 @@ async def _plane_chain(task_id: str) -> dict:
             headers={"X-API-Key": settings.plane_api_token}, timeout=5.0
         ) as c:
             pr = await c.get(f"{api}/")
-            project_name = pr.json().get("name", "?") if pr.status_code == 200 else "?"
+            pdata = pr.json() if pr.status_code == 200 else {}
+            project_name = pdata.get("name", "?")
+            project_ident = pdata.get("identifier", "")
             r = await c.get(f"{api}/issues/", params={"per_page": 100})
             r.raise_for_status()
             data = r.json()
@@ -262,17 +264,23 @@ async def _plane_chain(task_id: str) -> dict:
             )
             if match:
                 milestone = match.get("cycle") or f"module:{prefix.split('.')[0]}"
+                web = (settings.plane_web_url or settings.plane_api_url).rstrip("/")
+                # current Plane web routes issues as /browse/<IDENT>-<seq>/
+                seq = match.get("sequence_id")
+                url = (
+                    f"{web}/{settings.plane_workspace_slug}/browse/"
+                    f"{project_ident}-{seq}/"
+                    if project_ident and seq
+                    else f"{web}/{settings.plane_workspace_slug}/projects/"
+                    f"{settings.plane_project_id}/issues/{match['id']}"
+                )
                 chain = {
                     "linked": True,
                     "project": project_name,
                     "milestone": milestone,
                     "issue": match["name"],
                     "state": match.get("state"),
-                    "url": (
-                        f"{(settings.plane_web_url or settings.plane_api_url).rstrip('/')}/"
-                        f"{settings.plane_workspace_slug}/projects/"
-                        f"{settings.plane_project_id}/issues/{match['id']}"
-                    ),
+                    "url": url,
                 }
     except httpx.HTTPError as e:
         chain = {"linked": False, "reason": f"plane error: {e}"}

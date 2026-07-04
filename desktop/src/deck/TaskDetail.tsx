@@ -1,5 +1,6 @@
 /** Drill-down view: one task's info, Plane chain, and live event transcript. */
 import { useEffect, useRef, useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { getConfig } from "../api";
 
 interface Detail {
@@ -110,9 +111,12 @@ export default function TaskDetail({
           <>
             {plane.project} › {String(plane.milestone)} › {plane.issue}{" "}
             {plane.url && (
-              <a href={plane.url} target="_blank" rel="noreferrer">
+              <button
+                className="deck-btn"
+                onClick={() => openUrl(plane.url!).catch(console.error)}
+              >
                 open in Plane ↗
-              </a>
+              </button>
             )}
           </>
         ) : (

@@ -6,6 +6,10 @@
   "permissions": [
     "core:default",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "http://192.168.86.24:30080/*" }, { "url": "http://localhost:30080/*" }, { "url": "https://botcraftdev.grafana.net/*" }]
+    },
     "core:window:allow-set-fullscreen",
     "core:window:allow-is-fullscreen",
     "core:window:allow-minimize",

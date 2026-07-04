@@ -3,6 +3,7 @@
  * Polls /modules/gpu-deck/state every 2s. Light controls only.
  */
 import { useEffect, useRef, useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { getConfig } from "../api";
 import TaskDetail from "./TaskDetail";
 import "./deck.css";
@@ -202,9 +203,15 @@ export default function DeckView({ docked = false }: { docked?: boolean }) {
                   {t.plane.project} › {String(t.plane.milestone)} ›{" "}
                   {t.plane.issue}{" "}
                   {t.plane.url && (
-                    <a href={t.plane.url} target="_blank" rel="noreferrer">
+                    <button
+                      className="deck-btn"
+                      onClick={(e) => {
+                        e.stopPropagation(); // don't also trigger drill-down
+                        openUrl(t.plane.url!).catch(console.error);
+                      }}
+                    >
                       open ↗
-                    </a>
+                    </button>
                   )}
                 </>
               ) : (
