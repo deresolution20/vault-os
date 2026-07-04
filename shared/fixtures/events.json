@@ -1,0 +1,52 @@
+[
+  {
+    "type": "task_start",
+    "ts": 1751587200.0,
+    "source": "build-agent",
+    "taskId": "M0.1",
+    "title": "Monorepo layout",
+    "difficulty": "easy",
+    "worker": "r9700"
+  },
+  {
+    "type": "file_diff",
+    "ts": 1751587201.5,
+    "source": "build-agent",
+    "taskId": "M0.1",
+    "path": "api/src/vault_api/main.py",
+    "diff": "--- a/main.py\n+++ b/main.py\n@@ -1 +1 @@\n-old\n+new"
+  },
+  {
+    "type": "log",
+    "ts": 1751587202.0,
+    "source": "build-agent",
+    "taskId": "M0.1",
+    "level": "info",
+    "line": "tests passing"
+  },
+  {
+    "type": "task_done",
+    "ts": 1751587203.0,
+    "source": "build-agent",
+    "taskId": "M0.1",
+    "status": "success",
+    "tokensLocal": 12000,
+    "tokensPaid": 0
+  },
+  {
+    "type": "node_update",
+    "ts": 1751587204.0,
+    "source": "indexer",
+    "action": "created",
+    "nodeId": "Projects/VAULT.md",
+    "title": "VAULT"
+  },
+  {
+    "type": "system_vital",
+    "ts": 1751587205.0,
+    "source": "core",
+    "metric": "ws_clients",
+    "value": 1,
+    "unit": "count"
+  }
+]

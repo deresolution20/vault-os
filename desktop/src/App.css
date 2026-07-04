@@ -1,0 +1,40 @@
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: #05060a;
+  overflow: hidden;
+}
+
+.hud-root {
+  position: fixed;
+  inset: 0;
+}
+
+.hud-overlay {
+  position: fixed;
+  top: 12px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: "JetBrains Mono", "Fira Mono", monospace;
+  font-size: 13px;
+  color: #e8b959;
+  text-shadow: 0 0 6px rgba(232, 185, 89, 0.35);
+  pointer-events: none;
+}
+
+.hud-title {
+  letter-spacing: 0.2em;
+  opacity: 0.9;
+}
+
+.good {
+  color: #7ddc8a;
+}
+
+.bad {
+  color: #ff5f56;
+}

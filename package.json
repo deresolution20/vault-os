@@ -1,0 +1,11 @@
+{
+  "name": "vault-os",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VAULT — Voice-Activated Unified Logic Terminal (AI-OS, Step One)",
+  "scripts": {
+    "dev": "pnpm --filter vault-desktop dev",
+    "tauri": "pnpm --filter vault-desktop tauri",
+    "api": "cd api && uv run uvicorn vault_api.main:app --reload --port 8100"
+  }
+}

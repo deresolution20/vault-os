@@ -1,0 +1,28 @@
+# secrets & local config
+.env
+*.env.local
+
+# node
+node_modules/
+dist/
+
+# rust
+desktop/src-tauri/target/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# indexes & regenerable intermediates
+.tmp/
+*.sqlite
+*.sqlite-vec
+vault-index.db
+
+# local harness settings
+.claude/settings.local.json
+
+# OS noise
+.DS_Store
