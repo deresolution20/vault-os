@@ -1,8 +1,15 @@
 # VAULT — Voice-Activated Unified Logic Terminal (Step One)
 
-Desktop AI-OS: a dark HUD centered on a glowing, color-shifting, rotating 3D
-node cloud of the Obsidian vault, surrounded by live build-agent panels,
-backed by a local Hermes API and two AMD GPU model workers.
+Local AI-OS: Hermes API (graph/RAG/writes/events), two AMD GPU model workers,
+Plane/Grafana telemetry — and two front-ends:
+
+- **`vault` (the daily driver)** — Claude-Code-style Textual TUI: GPU deck
+  with live tok/s, cloud-orchestrator lane, task drill-down, and a command
+  deck (`/run`, `/hermes`, `/ask`, Esc to cancel). Zero GPU, SSH-friendly.
+  Decision + research: `docs/TUI-DECISION-2026-07-04.md`.
+- **Tauri HUD (optional eye-candy)** — the glowing 3D node cloud of the
+  Obsidian vault with live panels; launch it when you want the wall display
+  (`pnpm tauri dev`), costs nothing when closed.
 
 **Source of truth:** `docs/PRD-vault-os.md` (modules, tasks, ACs, build order)
 and `docs/RESEARCH-2026-07-03-vault-os-architecture.md` (verified tech

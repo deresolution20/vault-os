@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# vault-top — terminal GPU deck (Textual). Same data/controls as the window.
-# Works via symlink (e.g. ~/.local/bin/vault-top): resolve the real path.
+# vault — the VAULT daily-driver TUI (deck + command deck).
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 exec uv run --with textual --with requests --with websockets \
   python3 "$(dirname "$SELF")/vault_top.py" "$@"
