@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { VaultEvent, VaultGraph } from "@vault/shared/events";
-import { fetchGraph, subscribeEvents } from "./api";
+import { fetchGraph, fetchModules, subscribeEvents } from "./api";
 import VaultGraphScene, { FgNode } from "./graph/VaultGraph";
+import { ModuleManifestEntry, panelRegistry } from "./modules/loader";
 import NotePanel from "./panels/NotePanel";
 import FrameProbe, { SpikeResult } from "./spike/FrameProbe";
 import "./App.css";
@@ -15,6 +16,10 @@ export default function App() {
   const [wsUp, setWsUp] = useState(false);
   const [probe, setProbe] = useState<SpikeResult | null>(null);
   const [lastEvent, setLastEvent] = useState<string>("");
+  const [modules, setModules] = useState<ModuleManifestEntry[]>([]);
+  const [moduleEvents, setModuleEvents] = useState<
+    Record<string, VaultEvent[]>
+  >({});
 
   const loadGraph = useCallback(() => {
     fetchGraph().then(setGraph).catch((e) => console.error("graph:", e));
@@ -63,10 +68,18 @@ export default function App() {
         (e: VaultEvent) => {
           setLastEvent(`${e.type} · ${"nodeId" in e ? e.nodeId : e.source}`);
           if (e.type === "node_update") loadGraph();
+          // route to the emitting module's panel buffer (last 50 per module)
+          setModuleEvents((prev) => ({
+            ...prev,
+            [e.source]: [...(prev[e.source] ?? []), e].slice(-50),
+          }));
         },
         (up) => {
           setWsUp(up);
-          if (up) loadGraph();
+          if (up) {
+            loadGraph();
+            fetchModules().then(setModules).catch(console.error);
+          }
         }
       ),
     [loadGraph]
@@ -108,6 +121,19 @@ export default function App() {
             {probe.softwareRenderSuspected && " ⚠ SOFTWARE RENDER"}
           </span>
         )}
+      </div>
+
+      <div className="module-dock">
+        {modules
+          .filter((m) => m.panel && panelRegistry[m.panel])
+          .map((m) => {
+            const Panel = panelRegistry[m.panel!];
+            return (
+              <Suspense key={m.id} fallback={null}>
+                <Panel events={moduleEvents[m.id] ?? []} />
+              </Suspense>
+            );
+          })}
       </div>
 
       <NotePanel node={selected} onClose={() => setSelected(null)} />

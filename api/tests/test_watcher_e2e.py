@@ -44,9 +44,12 @@ def test_node_update_within_2s(client):
         start = time.monotonic()
         (client.vault / "NewNote.md").write_text("# New Note\nfresh thought\n")
 
-        evt = ws.receive_json()
+        # drain until the node_update arrives (other bus events may interleave)
+        while True:
+            evt = ws.receive_json()
+            if evt["type"] == "node_update":
+                break
         elapsed = time.monotonic() - start
-        assert evt["type"] == "node_update"
         assert evt["nodeId"] == "NewNote.md"
         assert evt["action"] in ("created", "updated")
         assert elapsed < 2.0, f"took {elapsed:.2f}s"

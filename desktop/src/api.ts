@@ -33,6 +33,12 @@ export async function fetchGraph(): Promise<VaultGraph> {
   return (await authed("/graph")).json();
 }
 
+export async function fetchModules(): Promise<
+  import("./modules/loader").ModuleManifestEntry[]
+> {
+  return (await authed("/modules")).json();
+}
+
 export async function readNote(absPath: string): Promise<string> {
   return invoke<string>("read_note", { path: absPath });
 }

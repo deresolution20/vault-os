@@ -41,10 +41,16 @@ class ModuleRegistry:
         self._modules[module.id] = module
 
     def mount_all(self, app: FastAPI) -> None:
+        # module routes get the same bearer guard as core routes
+        from .auth import auth_required
+
         for mod in self._modules.values():
             if mod.router is not None:
                 app.include_router(
-                    mod.router, prefix=f"/modules/{mod.id}", tags=[mod.id]
+                    mod.router,
+                    prefix=f"/modules/{mod.id}",
+                    tags=[mod.id],
+                    dependencies=[auth_required],
                 )
 
     def manifest(self) -> list[dict]:

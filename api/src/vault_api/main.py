@@ -138,4 +138,9 @@ async def ws_events(ws: WebSocket) -> None:
         await bus.disconnect(ws)
 
 
+from .discover import discover_modules  # noqa: E402
+
+_loaded = discover_modules(registry, bus)
+if _loaded:
+    print(f"[modules] loaded: {', '.join(_loaded)}")
 registry.mount_all(app)
