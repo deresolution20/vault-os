@@ -17,9 +17,9 @@ Routing: trivial/easy → local GPU workers · hard → R9700 worker or paid API
 | M0.2 | Tauri v2 shell: tray, global hotkey, sidecar spawn | medium | todo (finalization gated by M1.3) | M1.3 | skeleton exists via create-tauri-app |
 | M0.3 | Shared event schema TS + Pydantic + round-trip test | easy | **done 2026-07-03** | — | fixtures test green both sides |
 | M0.4 | .env.example, config loader, .gitignore | trivial | **done 2026-07-03** | — | pydantic-settings reads project .env |
-| M1.1 | Bloom spike scene (5k instanced nodes + Bloom) on real box | medium | code ready — **blocked on WebKitGTK dev headers (sudo)** | M0.1 | `desktop/src/spike/` |
-| M1.2 | Startup frame-time probe + software-render flag | easy | **done (code)** — needs the M1.1 run | M1.1 | writes `docs/M1-spike-result.json` |
-| M1.3 | Decision gate writeup: GO (Tauri) / NO-GO (Electron) | easy | todo | M1.1, M1.2 | WebKitGTK 2.52.3 confirmed ≥ 2.48 ✓ |
+| M1.1 | Bloom spike scene (5k instanced nodes + Bloom) on real box | medium | **done 2026-07-03** — 60fps vsync @4K on R9700 | M0.1 | `desktop/src/spike/` |
+| M1.2 | Startup frame-time probe + software-render flag | easy | **done 2026-07-03** — correctly flagged the NVIDIA software path | M1.1 | writes `docs/M1-spike-result.json` |
+| M1.3 | Decision gate writeup: GO (Tauri) / NO-GO (Electron) | easy | **done 2026-07-03 — GO (Tauri)** | M1.1, M1.2 | `docs/M1-decision-2026-07-03.md`; launcher must pin AMD GL |
 | M2.1 | Vault parser → graph JSON (wikilinks, backlinks, unresolved) | medium | todo | — | |
 | M2.2 | obsidian-notes-rag + local embeddings, chunk by heading | medium | todo | — | zero-network verify |
 | M2.3 | File-watcher → incremental re-index + node_update events | medium | todo | M2.1 | |
@@ -39,7 +39,7 @@ Routing: trivial/easy → local GPU workers · hard → R9700 worker or paid API
 | M5.3 | Local-first paid-API fallback + savings metric | medium | todo | M5.2 | ⚠ burns paid credits — confirm with Brice before load-testing |
 | M5.4 | (opt) vLLM-ROCm TP=1 recipe doc, R9700 only | easy | todo | M5.1 | never TP≥2 |
 | M6.1 | Sub-agents emit task/diff/log events → Live Build panel | medium | todo | M4.3 | |
-| M6.2 | Plane outbound issues + inbound webhook | medium | **blocked: no Plane creds/instance found** | M4.1 | ask Brice for Plane URL + token |
+| M6.2 | Plane outbound issues + inbound webhook | medium | instance found (k8s NodePort, http://localhost:30080) — **needs API token from Brice** | M4.1 | push tool ready: `tools/push_backlog_to_plane.py` |
 | M6.3 | Grafana embed in System Vitals ("resource", not activity) | easy | todo | — | needs GRAFANA_EMBED_URL |
 | M6.4 | System vitals strip | easy | todo | M4.3 | |
 | M7.1 | Module contract defined + one loaded example | medium | **sketched 2026-07-03** (`docs/MODULE-CONTRACT.md`, `modules.py`) | — | example module = M7.3 |

@@ -15,6 +15,13 @@ export SPIKE_AUTOEXIT=1
 # Opt in to the WebGL GPU process (research addendum: assume opt-in needed)
 export WEBKIT_FEATURES="${WEBKIT_FEATURES:-UseGPUProcessForWebGL}"
 
+# This box also has an NVIDIA 4060 Ti, and glvnd routes GL there by default —
+# the UNFAVORABLE WebKitGTK case (first spike run: 10fps software path).
+# Pin GL/EGL to Mesa/RADV on the AMD card, which is the PRD's target.
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+export __GLX_VENDOR_LIBRARY_NAME=mesa
+export DRI_PRIME=1
+
 cd "$ROOT/desktop"
 echo "[spike] building + launching (first Rust build takes several minutes)…"
 pnpm tauri dev &
