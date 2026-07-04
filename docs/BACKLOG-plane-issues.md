@@ -9,7 +9,10 @@ Push tool: `tools/push_backlog_to_plane.py` (to be written when creds exist —
 one deterministic script, per WAT).
 
 Labels to carry onto each issue: `difficulty:<tag>`, `module:<M#>`.
-Routing: trivial/easy → local GPU workers · hard → R9700 worker or paid API.
+**Build agent: Fable 5 builds ALL tasks directly (Brice's directive 2026-07-03
+— do NOT farm coding tasks to local models).** The difficulty tags are kept as
+effort metadata and for the M5 *runtime* router (an app feature for Hermes's
+own inference, not a build workforce).
 
 | ID | Title | Difficulty | State | Depends on | Notes |
 |---|---|---|---|---|---|
