@@ -79,13 +79,8 @@ class _Handler(FileSystemEventHandler):
 
 async def handle_change(action: str, vault: Path, rel: Path) -> None:
     rel_str = rel.as_posix()
-    try:
-        if action == "deleted":
-            await asyncio.to_thread(rag().remove_file, rel_str)
-        else:
-            await asyncio.to_thread(rag().index_file, vault / rel)
-    except Exception as e:  # a broken note must not kill the watcher
-        print(f"[watcher] reindex failed for {rel_str}: {e}")
+    # emit FIRST: the graph must update the moment the vault changes; the
+    # embedding (ollama) can lag behind when the card is contended
     await bus.emit(
         NodeUpdateEvent(
             ts=time.time(),
@@ -95,6 +90,13 @@ async def handle_change(action: str, vault: Path, rel: Path) -> None:
             title=rel.stem,
         )
     )
+    try:
+        if action == "deleted":
+            await asyncio.to_thread(rag().remove_file, rel_str)
+        else:
+            await asyncio.to_thread(rag().index_file, vault / rel)
+    except Exception as e:  # a broken note must not kill the watcher
+        print(f"[watcher] reindex failed for {rel_str}: {e}")
 
 
 class VaultWatcher:

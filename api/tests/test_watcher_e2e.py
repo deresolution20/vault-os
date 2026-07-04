@@ -54,10 +54,17 @@ def test_node_update_within_2s(client):
         assert evt["action"] in ("created", "updated")
         assert elapsed < 2.0, f"took {elapsed:.2f}s"
 
-    # index actually grew (embeds via local ollama)
+    # index actually grew (embeds via local ollama — may lag if the GPU is
+    # contended, so poll instead of asserting instantly)
     from vault_api.rag import rag
 
-    assert any(
-        h["metadata"]["file_path"] == "NewNote.md"
-        for h in rag().query("fresh thought", 5)
-    )
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        if any(
+            h["metadata"]["file_path"] == "NewNote.md"
+            for h in rag().query("fresh thought", 5)
+        ):
+            break
+        time.sleep(2)
+    else:
+        raise AssertionError("NewNote.md never appeared in the RAG index")

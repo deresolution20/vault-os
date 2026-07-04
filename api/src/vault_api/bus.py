@@ -13,6 +13,12 @@ class EventBus:
     def __init__(self) -> None:
         self._clients: set[WebSocket] = set()
         self._lock = asyncio.Lock()
+        # in-process subscribers (modules reacting to events, e.g. Plane sync)
+        self._subscribers: list = []
+
+    def subscribe(self, callback) -> None:
+        """callback: async fn(VaultEvent) — errors are logged, never fatal."""
+        self._subscribers.append(callback)
 
     async def connect(self, ws: WebSocket) -> None:
         await ws.accept()
@@ -32,6 +38,11 @@ class EventBus:
                 await ws.send_json(payload)
             except Exception:
                 await self.disconnect(ws)
+        for cb in self._subscribers:
+            try:
+                await cb(event)
+            except Exception as e:  # a broken subscriber must not stop the bus
+                print(f"[bus] subscriber error: {e}")
 
 
 bus = EventBus()

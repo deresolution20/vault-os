@@ -76,6 +76,51 @@ body,
   text-shadow: 0 0 8px rgba(255, 179, 71, 0.35);
 }
 
+.live-build-diff {
+  margin: 4px 0;
+  padding: 6px;
+  max-height: 140px;
+  overflow: hidden;
+  background: rgba(0, 229, 255, 0.05);
+  border-left: 2px solid #00e5ff;
+  font-size: 10px;
+  color: #7ddcff;
+  white-space: pre-wrap;
+}
+
+.live-build-logs {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.log-error {
+  color: #ff5f56;
+}
+
+/* ── vitals strip (M6.4) — resource, not activity ─────────────────────── */
+.vitals-strip {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  display: flex;
+  gap: 14px;
+  font-family: "JetBrains Mono", "Fira Mono", monospace;
+  font-size: 11px;
+  color: #ffb347;
+  opacity: 0.85;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.vital b {
+  color: #00e5ff;
+}
+
+.vital-note {
+  opacity: 0.4;
+  letter-spacing: 0.1em;
+}
+
 /* ── note side panel ──────────────────────────────────────────────────── */
 .note-panel {
   position: fixed;

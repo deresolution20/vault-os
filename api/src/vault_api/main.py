@@ -17,6 +17,34 @@ from .modules import registry
 from .rag import rag
 
 
+async def _vitals_loop() -> None:
+    """M6.4 — periodic system_vital events for the HUD strip. These are
+    RESOURCE metrics, never an 'agent is working' signal (PRD §3.2)."""
+    import asyncio
+
+    from .events import SystemVitalEvent
+
+    while True:
+        try:
+            notes = sum(
+                1
+                for p in settings.vault_path.rglob("*.md")
+                if ".obsidian" not in p.parts and ".trash" not in p.parts
+            )
+            for metric, value in (
+                ("vault_notes", notes),
+                ("ws_clients", len(bus._clients)),
+            ):
+                await bus.emit(
+                    SystemVitalEvent(
+                        ts=time.time(), source="core", metric=metric, value=value
+                    )
+                )
+        except Exception as e:
+            print(f"[vitals] {e}")
+        await asyncio.sleep(10)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
@@ -26,7 +54,9 @@ async def lifespan(app: FastAPI):
     if not settings.hermes_api_token:
         print("[auth] WARNING: HERMES_API_TOKEN unset — auth disabled (loopback only)")
     watcher.start(asyncio.get_running_loop())
+    vitals = asyncio.create_task(_vitals_loop())
     yield
+    vitals.cancel()
     watcher.stop()
 
 
@@ -117,6 +147,19 @@ async def patch_note(path: str, patch: NotePatch) -> dict:
     except obsidian.ObsidianUnavailable as e:
         raise HTTPException(503, f"Obsidian write layer unavailable: {e}")
     return {"path": path, "patched": True}
+
+
+@app.post("/events", status_code=202, dependencies=[auth_required])
+async def ingest_event(event: dict) -> dict:
+    """M6.1 — agents push task_start/file_diff/log/task_done here; the bus
+    fans them out to HUD panels and module subscribers."""
+    from pydantic import TypeAdapter
+
+    from .events import VaultEvent as VE
+
+    parsed = TypeAdapter(VE).validate_python(event)
+    await bus.emit(parsed)
+    return {"accepted": parsed.type}
 
 
 @app.websocket("/ws/events")

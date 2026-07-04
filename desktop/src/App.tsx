@@ -20,6 +20,7 @@ export default function App() {
   const [moduleEvents, setModuleEvents] = useState<
     Record<string, VaultEvent[]>
   >({});
+  const [vitals, setVitals] = useState<Record<string, number>>({});
 
   const loadGraph = useCallback(() => {
     fetchGraph().then(setGraph).catch((e) => console.error("graph:", e));
@@ -68,6 +69,8 @@ export default function App() {
         (e: VaultEvent) => {
           setLastEvent(`${e.type} · ${"nodeId" in e ? e.nodeId : e.source}`);
           if (e.type === "node_update") loadGraph();
+          if (e.type === "system_vital")
+            setVitals((v) => ({ ...v, [e.metric]: e.value }));
           // route to the emitting module's panel buffer (last 50 per module)
           setModuleEvents((prev) => ({
             ...prev,
@@ -121,6 +124,15 @@ export default function App() {
             {probe.softwareRenderSuspected && " ⚠ SOFTWARE RENDER"}
           </span>
         )}
+      </div>
+
+      <div className="vitals-strip">
+        {Object.entries(vitals).map(([k, v]) => (
+          <span key={k} className="vital">
+            {k.replace(/_/g, " ")} <b>{v}</b>
+          </span>
+        ))}
+        <span className="vital vital-note">resource · not activity</span>
       </div>
 
       <div className="module-dock">
