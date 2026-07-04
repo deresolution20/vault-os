@@ -38,11 +38,11 @@ own inference, not a build workforce).
 | M5.1 | ROCm 7.2.x + llama-server Vulkan on R9700 (worker 1) | hard | **done 2026-07-04** — llama.cpp b9870 Vulkan, qwen3-32B q4, 25 tok/s, idles correctly (no HIP pin); worker start-on-demand | — | coordinate `projects/r9700-kernel` |
 | M5.1b | Second Vulkan worker on 7900 XTX | hard | **waits for card (~Jul 7)** | M5.1 | |
 | M5.2 | Model router: route by difficulty tag + health checks | medium | **done (single-lane live) 2026-07-04** — hard→r9700 verified via /llm/complete; dual-lane balancing waits for 7900 XTX | M5.1 | full balancing needs both cards |
-| M5.3 | Local-first paid-API fallback + savings metric | medium | **code done 2026-07-04** — fallback + token ledger, mocked; real paid call awaits Brice approval | M5.2 | ⚠ burns paid credits — confirm with Brice before load-testing |
+| M5.3 | Local-first paid-API fallback + savings metric | medium | **done 2026-07-04 — LIVE-PROVEN**: worker down → paid-api lane, ledger 22 paid tokens, reason logged | M5.2 | ⚠ burns paid credits — confirm with Brice before load-testing |
 | M5.4 | (opt) vLLM-ROCm TP=1 recipe doc, R9700 only | easy | todo | M5.1 | never TP≥2 |
 | M6.1 | Sub-agents emit task/diff/log events → Live Build panel | medium | **done 2026-07-04** — POST /events + emit_build_events.py + Live Build panel; demo verified | M4.3 | |
 | M6.2 | Plane outbound issues + inbound webhook | medium | **done 2026-07-04** — task_start→RUN issue→completed live-verified; inbound webhook re-emits (dispatcher = Hermes wiring later) | M4.1 | push tool ready: `tools/push_backlog_to_plane.py` |
-| M6.3 | Grafana embed in System Vitals ("resource", not activity) | easy | **done (code) 2026-07-04** — module + iframe panel; needs GRAFANA_EMBED_URL from Brice to render | — | needs GRAFANA_EMBED_URL |
+| M6.3 | Grafana embed in System Vitals ("resource", not activity) | easy | **done 2026-07-04** — Grafana Cloud denies iframes (XFO); dashboard opens in dedicated child webview via open_vitals | — | needs GRAFANA_EMBED_URL |
 | M6.4 | System vitals strip | easy | **done 2026-07-04** — vitals loop → HUD strip, labeled resource-not-activity | M4.3 | |
 | M7.1 | Module contract defined + one loaded example | medium | **done 2026-07-04** — contract + filesystem discovery + 4 loaded modules | — | example module = M7.3 |
 | M7.2 | Refactor RAG/write/serving/telemetry as modules | medium | todo | M7.1, M4, M5, M6 | |

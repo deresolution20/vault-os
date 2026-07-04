@@ -121,11 +121,18 @@ body,
   letter-spacing: 0.1em;
 }
 
-.grafana-frame {
-  width: 300px;
-  height: 160px;
-  border: none;
-  background: transparent;
+.vitals-button {
+  background: none;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: #00e5ff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.vitals-button:hover {
+  background: rgba(0, 229, 255, 0.12);
 }
 
 /* ── note side panel ──────────────────────────────────────────────────── */

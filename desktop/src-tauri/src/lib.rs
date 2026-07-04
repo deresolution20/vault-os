@@ -87,6 +87,31 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// M6.3 — open the Grafana dashboard in its own webview window. Grafana
+/// Cloud sends X-Frame-Options: deny (no iframes, even public dashboards);
+/// a child window sidesteps that. URL comes from the project .env only —
+/// the HUD webview cannot pick the destination.
+#[tauri::command]
+fn open_vitals(app: AppHandle) -> Result<(), String> {
+    let url = env_from_project("GRAFANA_EMBED_URL")
+        .filter(|u| !u.is_empty())
+        .ok_or("GRAFANA_EMBED_URL not configured")?;
+    if let Some(w) = app.get_webview_window("vitals") {
+        w.show().and_then(|_| w.set_focus()).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        "vitals",
+        tauri::WebviewUrl::External(url.parse().map_err(|e| format!("{e}"))?),
+    )
+    .title("VAULT · GPU RESOURCE (Grafana)")
+    .inner_size(1000.0, 560.0)
+    .build()
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn toggle_hud(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         if w.is_visible().unwrap_or(false) {
@@ -182,7 +207,8 @@ pub fn run() {
             report_spike,
             get_config,
             read_note,
-            quit_app
+            quit_app,
+            open_vitals
         ])
         .setup(|app| {
             // tray: toggle + quit (M0.2)
