@@ -11,6 +11,7 @@ module loads but sync is disabled (logged once).
 """
 
 import asyncio
+import re
 import time
 
 import httpx
@@ -57,10 +58,21 @@ async def _state_id(group: str) -> str | None:
     return _states.get(group)
 
 
+# Mirror PLANNED work only (Brice 2026-07-04): ad-hoc /run commands and
+# hermes chat (taskId run-xxxx) must NOT become Plane work items.
+PLANNED_ID = re.compile(r"^[MX]\d")
+
+
+def _should_mirror(event: TaskStartEvent) -> bool:
+    return bool(PLANNED_ID.match(event.taskId)) or event.source == "build-agent"
+
+
 async def _on_event(event) -> None:
     if not _enabled():
         return
     if isinstance(event, TaskStartEvent):
+        if not _should_mirror(event):
+            return
         async with _client() as c:
             r = await c.post(
                 f"{_api()}/issues/",
