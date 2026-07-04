@@ -128,3 +128,8 @@
   overflow-y: auto;
   font-size: 12px;
 }
+
+.deck-tps {
+  color: #7ddc8a;
+  font-size: 11px;
+}

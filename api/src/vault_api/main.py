@@ -55,7 +55,14 @@ async def lifespan(app: FastAPI):
         print("[auth] WARNING: HERMES_API_TOKEN unset — auth disabled (loopback only)")
     watcher.start(asyncio.get_running_loop())
     vitals = asyncio.create_task(_vitals_loop())
+    # module lifecycle hooks (M7 contract)
+    for mod in registry.modules:
+        if mod.on_startup:
+            await mod.on_startup()
     yield
+    for mod in registry.modules:
+        if mod.on_shutdown:
+            await mod.on_shutdown()
     vitals.cancel()
     watcher.stop()
 

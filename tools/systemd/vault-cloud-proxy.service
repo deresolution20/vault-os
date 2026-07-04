@@ -1,0 +1,16 @@
+# vault-cloud-proxy — transparent relay for the Hermes cloud orchestrator
+# (127.0.0.1:11500 → https://ollama.com). ALWAYS-ON: Hermes depends on it.
+# Install: cp to ~/.config/systemd/user/ && systemctl --user daemon-reload \
+#          && systemctl --user enable --now vault-cloud-proxy
+[Unit]
+Description=VAULT cloud-orchestrator relay (:11500 -> ollama.com)
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/home/brice/.local/bin/uv run --with fastapi --with uvicorn[standard] --with httpx python3 /home/brice/Claude_Code_Projects/projects/vault-os/tools/cloud_proxy.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

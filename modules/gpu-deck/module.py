@@ -45,6 +45,171 @@ from vault_api.config import PROJECT_ROOT  # noqa: E402
 
 PERSIST_PATH = PROJECT_ROOT / ".tmp/gpu-deck-history.json"
 
+# ── throughput: (ts, cumulative_tokens) samples per lane, ~1h window ─────
+SAMPLE_EVERY_S = 5.0
+WINDOW_S = 3600.0
+# lanes: worker ids ("r9700", "7900xtx") + "paid-api"
+_samples: dict[str, list[list[float]]] = {}
+_sampler_task = None
+
+CLOUD_STATS = PROJECT_ROOT / ".tmp/cloud-proxy-stats.jsonl"
+CLOUD_LIVE = PROJECT_ROOT / ".tmp/cloud-proxy-live.json"
+
+METRIC_TOKENS = "llamacpp:tokens_predicted_total"
+
+
+def _push_sample(lane: str, ts: float, total: float) -> None:
+    buf = _samples.setdefault(lane, [])
+    buf.append([ts, total])
+    cutoff = ts - WINDOW_S
+    while buf and buf[0][0] < cutoff:
+        buf.pop(0)
+
+
+def _throughput() -> dict:
+    """Per-lane liveTps + hourTokens + hourAvgTps (rate while generating)."""
+    out = {}
+    for lane, buf in _samples.items():
+        if len(buf) < 2:
+            out[lane] = {"liveTps": 0.0, "hourTokens": 0, "hourAvgTps": 0.0}
+            continue
+        (t0, c0), (t1, c1) = buf[-2], buf[-1]
+        live = max(0.0, (c1 - c0) / max(t1 - t0, 1e-6))
+        hour_tokens = max(0, int(buf[-1][1] - buf[0][1]))
+        active_rates = []
+        for (ta, ca), (tb, cb) in zip(buf, buf[1:]):
+            d = cb - ca
+            if d > 0:
+                active_rates.append(d / max(tb - ta, 1e-6))
+        avg = sum(active_rates) / len(active_rates) if active_rates else 0.0
+        out[lane] = {
+            "liveTps": round(live, 1),
+            "hourTokens": hour_tokens,
+            "hourAvgTps": round(avg, 1),
+        }
+    return out
+
+
+async def _sample_once() -> None:
+    now = time.time()
+    # worker lanes: prometheus counter (counter resets on worker restart —
+    # guard with max(prev, new)? no: a reset makes delta negative, which the
+    # rate math clamps to 0 and the window total ignores via max(0, ...))
+    for w in WORKERS:
+        root = w["url"].rstrip("/").rsplit("/v1", 1)[0]
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as c:
+                r = await c.get(f"{root}/metrics")
+                if r.status_code != 200:
+                    continue
+                completed = 0.0
+                for line in r.text.splitlines():
+                    if line.startswith(METRIC_TOKENS):
+                        completed = float(line.split()[-1])
+                        break
+                # the counter only moves on request COMPLETION; add tokens
+                # decoded so far by in-flight slots for a true live rate
+                in_flight = 0.0
+                rs = await c.get(f"{root}/slots")
+                if rs.status_code == 200:
+                    for slot in rs.json():
+                        if slot.get("is_processing"):
+                            nxt = slot.get("next_token") or [{}]
+                            in_flight += float(nxt[0].get("n_decoded", 0))
+            _push_sample(w["gpu"], now, completed + in_flight)
+        except (httpx.HTTPError, ValueError):
+            continue
+    # paid lane from the router ledger (cumulative counter, same math)
+    from vault_api.router import model_router
+
+    _push_sample("paid-api", now, float(model_router.ledger.paid_tokens))
+
+
+async def _sampler_loop() -> None:
+    while True:
+        try:
+            await _sample_once()
+        except Exception as e:
+            print(f"[gpu-deck] sampler: {e}")
+        await asyncio.sleep(SAMPLE_EVERY_S)
+
+
+async def _start_sampler() -> None:
+    global _sampler_task
+    _sampler_task = asyncio.create_task(_sampler_loop())
+
+
+async def _stop_sampler() -> None:
+    if _sampler_task:
+        _sampler_task.cancel()
+    _save()  # keep rate windows across restarts
+
+
+def _cloud_state() -> list[dict]:
+    """Per-model cloud-orchestrator stats from the relay's files, last hour."""
+    import json
+
+    cutoff = time.time() - WINDOW_S
+    per_model: dict[str, dict] = {}
+    try:
+        for line in CLOUD_STATS.read_text().splitlines()[-5000:]:
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            if rec.get("ts", 0) < cutoff:
+                continue
+            m = per_model.setdefault(
+                rec.get("model") or "?",
+                {
+                    "model": rec.get("model") or "?",
+                    "requests": 0,
+                    "tokensIn": 0,
+                    "tokensOut": 0,
+                    "latencies": [],
+                    "tps": [],
+                    "approx": False,
+                    "inFlight": 0,
+                },
+            )
+            m["requests"] += 1
+            m["tokensIn"] += rec.get("tokensIn", 0) or 0
+            m["tokensOut"] += rec.get("tokensOut", 0) or 0
+            m["latencies"].append(rec.get("durationMs", 0))
+            if rec.get("tokensOut") and rec.get("durationMs"):
+                m["tps"].append(rec["tokensOut"] / (rec["durationMs"] / 1000))
+            if rec.get("approx"):
+                m["approx"] = True
+    except FileNotFoundError:
+        pass
+    try:
+        live = json.loads(CLOUD_LIVE.read_text())
+        for model in live.get("inFlightModels", []):
+            m = per_model.setdefault(
+                model,
+                {
+                    "model": model,
+                    "requests": 0,
+                    "tokensIn": 0,
+                    "tokensOut": 0,
+                    "latencies": [],
+                    "tps": [],
+                    "approx": False,
+                    "inFlight": 0,
+                },
+            )
+            m["inFlight"] += 1
+    except (FileNotFoundError, ValueError):
+        pass
+    out = []
+    for m in per_model.values():
+        lat = m.pop("latencies")
+        tps = m.pop("tps")
+        m["avgLatencyMs"] = int(sum(lat) / len(lat)) if lat else 0
+        m["avgTps"] = round(sum(tps) / len(tps), 1) if tps else 0.0
+        out.append(m)
+    return sorted(out, key=lambda m: -m["requests"])
+
 
 def _save() -> None:
     try:
@@ -52,7 +217,13 @@ def _save() -> None:
         import json
 
         PERSIST_PATH.write_text(
-            json.dumps({"history": _history, "taskEvents": _task_events})
+            json.dumps(
+                {
+                    "history": _history,
+                    "taskEvents": _task_events,
+                    "samples": _samples,
+                }
+            )
         )
     except OSError as e:
         print(f"[gpu-deck] persist failed: {e}")
@@ -65,6 +236,7 @@ def _load() -> None:
         data = json.loads(PERSIST_PATH.read_text())
         _history.extend(data.get("history", [])[:HISTORY_LIMIT])
         _task_events.update(data.get("taskEvents", {}))
+        _samples.update(data.get("samples", {}))
     except FileNotFoundError:
         pass
     except (OSError, ValueError) as e:
@@ -310,6 +482,8 @@ async def deck_state() -> dict:
         "runningTasks": running,
         "history": _history,
         "ledger": model_router.ledger.as_dict(),
+        "throughput": _throughput(),
+        "cloud": _cloud_state(),
     }
 
 
@@ -353,5 +527,7 @@ def register(registry: ModuleRegistry, bus: EventBus) -> None:
             router=router,
             event_types=[],
             panel=None,  # deck is docked into the core HUD; window via open_deck
+            on_startup=_start_sampler,
+            on_shutdown=_stop_sampler,
         )
     )

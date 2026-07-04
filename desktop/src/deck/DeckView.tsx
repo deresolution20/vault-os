@@ -21,6 +21,20 @@ interface DeckState {
     currentPrompt?: string;
   }[];
   ollama: { model: string; vramGB: number; totalGB: number; until: string }[];
+  throughput: Record<
+    string,
+    { liveTps: number; hourTokens: number; hourAvgTps: number }
+  >;
+  cloud: {
+    model: string;
+    requests: number;
+    tokensIn: number;
+    tokensOut: number;
+    avgTps: number;
+    avgLatencyMs: number;
+    inFlight: number;
+    approx: boolean;
+  }[];
   runningTasks: {
     taskId: string;
     title: string;
@@ -128,6 +142,7 @@ export default function DeckView({ docked = false }: { docked?: boolean }) {
 
       {state.gpus.map((g) => {
         const worker = state.workers.find((w) => w.gpu === g.id);
+        const tp = state.throughput?.[g.id];
         return (
           <div key={g.id} className="deck-gpu">
             <div className="deck-gpu-head">
@@ -137,6 +152,15 @@ export default function DeckView({ docked = false }: { docked?: boolean }) {
                 {g.vramTotalGB} GB
               </span>
             </div>
+            {tp && (
+              <div className="deck-line deck-tps">
+                ⚡ {tp.liveTps} tok/s
+                <span className="deck-dim">
+                  {" "}
+                  · 1h Ø {tp.hourAvgTps} tok/s · {tp.hourTokens.toLocaleString()} tok
+                </span>
+              </div>
+            )}
             {worker && (
               <div className="deck-line">
                 ├─ vault-worker{" "}
@@ -177,6 +201,30 @@ export default function DeckView({ docked = false }: { docked?: boolean }) {
           ))}
         </div>
       )}
+
+      <div className="deck-section">
+        <div className="deck-head">CLOUD ORCHESTRATOR · ollama.com</div>
+        {(!state.cloud || state.cloud.length === 0) && (
+          <div className="deck-line deck-dim">└─ no traffic in the last hour</div>
+        )}
+        {state.cloud?.map((c) => (
+          <div key={c.model} className="deck-line">
+            {c.inFlight > 0 ? spinner : "├─"} <b>{c.model}</b>{" "}
+            <span className="deck-dim">
+              {c.requests} req · in {c.tokensIn.toLocaleString()} / out{" "}
+              {c.tokensOut.toLocaleString()}
+              {c.approx && "≈"} tok · {c.avgTps} tok/s · {c.avgLatencyMs}ms
+            </span>
+          </div>
+        ))}
+        {state.throughput?.["paid-api"] &&
+          state.throughput["paid-api"].hourTokens > 0 && (
+            <div className="deck-line deck-dim">
+              └─ anthropic fallback · {state.throughput["paid-api"].hourTokens}{" "}
+              tok this hour
+            </div>
+          )}
+      </div>
 
       <div className="deck-section">
         <div className="deck-head">RUNNING</div>

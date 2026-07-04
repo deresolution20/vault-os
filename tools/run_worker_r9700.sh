@@ -52,4 +52,5 @@ exec "$LLAMA_DIR/llama-server" \
   --ctx-size "$CTX" \
   --n-gpu-layers 999 \
   --jinja \
-  --flash-attn on
+  --flash-attn on \
+  --metrics

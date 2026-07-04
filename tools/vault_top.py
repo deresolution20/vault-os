@@ -199,6 +199,7 @@ class VaultTop(App):
             style="dim",
         )
         workers = {w["gpu"]: w for w in s.get("workers", [])}
+        throughput = s.get("throughput", {})
         for i, g in enumerate(s.get("gpus", [])):
             used, total = g["vramUsedGB"], g["vramTotalGB"]
             bar = "█" * int(20 * used / max(total, 1)) + "░" * (
@@ -206,6 +207,13 @@ class VaultTop(App):
             )
             out.append(f"◉ {g['name']} ", style="bold #00e5ff")
             out.append(f"{bar} {used}/{total} GB\n", style="#7ddcff")
+            tp = throughput.get(g["id"])
+            if tp:
+                out.append(
+                    f"  ⚡ {tp['liveTps']} tok/s · 1h Ø {tp['hourAvgTps']} "
+                    f"tok/s · {tp['hourTokens']:,} tok\n",
+                    style="#7ddc8a",
+                )
             w = workers.get(g["id"])
             if w:
                 if w.get("up"):
@@ -219,6 +227,20 @@ class VaultTop(App):
         for m in s.get("ollama", []):
             out.append(
                 f"  ollama · {m['model']} · {m['vramGB']}GB vram\n", style="#cfe8f5"
+            )
+        out.append("\nCLOUD ORCHESTRATOR · ollama.com\n", style="bold #ffb347")
+        cloud = s.get("cloud", [])
+        if not cloud:
+            out.append("  no traffic in the last hour\n", style="dim")
+        for c in cloud:
+            spin = SPIN[self.tick % len(SPIN)] if c.get("inFlight") else "├─"
+            approx = "≈" if c.get("approx") else ""
+            out.append(f"  {spin} {c['model']} ", style="bold")
+            out.append(
+                f"{c['requests']} req · in {c['tokensIn']:,} / out "
+                f"{c['tokensOut']:,}{approx} tok · {c['avgTps']} tok/s · "
+                f"{c['avgLatencyMs']}ms\n",
+                style="dim",
             )
         out.append("\nRUNNING\n", style="bold #ffb347")
         running = s.get("runningTasks", [])
