@@ -4,6 +4,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { getConfig } from "../api";
+import TaskDetail from "./TaskDetail";
 import "./deck.css";
 
 interface DeckState {
@@ -51,10 +52,11 @@ function vramBar(used: number, total: number): string {
   return "█".repeat(filled) + "░".repeat(w - filled);
 }
 
-export default function DeckView() {
+export default function DeckView({ docked = false }: { docked?: boolean }) {
   const [state, setState] = useState<DeckState | null>(null);
   const [err, setErr] = useState("");
   const [tick, setTick] = useState(0);
+  const [drill, setDrill] = useState<string | null>(null);
   const cfg = useRef<{ apiUrl: string; token: string } | null>(null);
 
   useEffect(() => {
@@ -94,9 +96,18 @@ export default function DeckView() {
     ).catch(() => {});
   };
 
+  const rootClass = docked ? "deck-root deck-docked" : "deck-root";
+
+  if (drill)
+    return (
+      <div className={rootClass}>
+        <TaskDetail taskId={drill} onBack={() => setDrill(null)} />
+      </div>
+    );
+
   if (!state)
     return (
-      <div className="deck-root">
+      <div className={rootClass}>
         <div className="deck-title">VAULT · GPU DECK</div>
         <div className="deck-err">{err || "connecting…"}</div>
       </div>
@@ -105,9 +116,9 @@ export default function DeckView() {
   const spinner = SPIN[tick % SPIN.length];
 
   return (
-    <div className="deck-root">
+    <div className={rootClass}>
       <div className="deck-title">
-        VAULT · GPU DECK{" "}
+        GPU DECK{" "}
         <span className="deck-dim">
           local {state.ledger.localTokens} tok · paid {state.ledger.paidTokens}{" "}
           tok
@@ -172,7 +183,12 @@ export default function DeckView() {
           <div className="deck-line deck-dim">└─ idle</div>
         )}
         {state.runningTasks.map((t) => (
-          <div key={t.taskId}>
+          <div
+            key={t.taskId}
+            className="deck-drillable"
+            onClick={() => setDrill(t.taskId)}
+            title="drill down"
+          >
             <div className="deck-line">
               {spinner} <b>{t.taskId}</b> {t.title}{" "}
               <span className="deck-dim">
@@ -205,7 +221,12 @@ export default function DeckView() {
           <div className="deck-line deck-dim">└─ none yet</div>
         )}
         {state.history.map((h, i) => (
-          <div key={i} className="deck-line">
+          <div
+            key={i}
+            className="deck-line deck-drillable"
+            onClick={() => setDrill(h.taskId)}
+            title="drill down"
+          >
             {h.status === "success" ? (
               <span className="ok">✓</span>
             ) : (

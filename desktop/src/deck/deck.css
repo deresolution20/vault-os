@@ -8,6 +8,26 @@
   line-height: 1.7;
 }
 
+/* docked variant lives inside .deck-dock on the home screen */
+.deck-docked {
+  min-height: unset;
+  background: transparent;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.deck-detail {
+  color: #cfe8f5;
+  font-family: "JetBrains Mono", "Fira Mono", monospace;
+  line-height: 1.7;
+}
+
+.deck-root:not(.deck-docked) > .deck-detail,
+.deck-root.deck-detail-host {
+  padding: 0;
+}
+
 .deck-title {
   color: #ffb347;
   letter-spacing: 0.3em;
@@ -81,4 +101,30 @@
 
 .deck-btn:hover {
   background: rgba(0, 229, 255, 0.12);
+}
+
+.deck-drillable {
+  cursor: pointer;
+}
+
+.deck-drillable:hover {
+  background: rgba(0, 229, 255, 0.06);
+}
+
+.deck-diff {
+  margin: 2px 0;
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+  background: rgba(0, 229, 255, 0.05);
+  border-left: 2px solid #00e5ff;
+  font-size: 11px;
+  color: #7ddcff;
+  white-space: pre-wrap;
+}
+
+.deck-transcript {
+  max-height: 45vh;
+  overflow-y: auto;
+  font-size: 12px;
 }

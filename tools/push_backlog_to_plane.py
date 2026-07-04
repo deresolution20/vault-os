@@ -25,8 +25,9 @@ from dotenv import dotenv_values
 ROOT = Path(__file__).resolve().parents[1]
 BACKLOG = ROOT / "docs/BACKLOG-plane-issues.md"
 
+# id: M-prefixed PRD tasks (M0.1, M5.1b) or X-prefixed extras (X1, brice asks)
 ROW_RE = re.compile(
-    r"^\|\s*(?P<id>M\d[\w.]*b?)\s*\|\s*(?P<title>[^|]+?)\s*\|\s*(?P<difficulty>\w+)\s*\|"
+    r"^\|\s*(?P<id>[MX]\d[\w.]*b?)\s*\|\s*(?P<title>[^|]+?)\s*\|\s*(?P<difficulty>\w+)\s*\|"
     r"\s*(?P<state>[^|]+?)\s*\|\s*(?P<deps>[^|]*?)\s*\|\s*(?P<notes>[^|]*?)\s*\|$"
 )
 

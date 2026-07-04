@@ -2,7 +2,8 @@
 """vault-top — terminal TUI for the VAULT GPU deck (same data as the window).
 
 Run: tools/vault-top   (wrapper: uv run --with textual --with requests ...)
-Keys: q quit · 1/2 start-stop worker 1/2 · o open first running task in Plane
+Keys: q quit · 1/2 start-stop worker · o open selected task in Plane
+      ↑/↓ select task · enter drill down · esc back
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from pathlib import Path
 import requests
 from rich.text import Text
 from textual.app import App, ComposeResult
+from textual.screen import Screen
 from textual.widgets import Footer, Static
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,12 +31,89 @@ def _env() -> dict:
     return vals
 
 
+class TaskScreen(Screen):
+    """Drill-down: one task's transcript, polled live."""
+
+    BINDINGS = [("escape", "app.pop_screen", "back"), ("q", "app.quit", "quit")]
+
+    def __init__(self, task_id: str) -> None:
+        super().__init__()
+        self.task_id = task_id
+        self.detail: dict = {}
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="detail")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.set_interval(2.0, self.refresh_detail)
+        self.refresh_detail()
+
+    def refresh_detail(self) -> None:
+        app: "VaultTop" = self.app  # type: ignore[assignment]
+        try:
+            r = requests.get(
+                f"{app.api}/modules/gpu-deck/task/{self.task_id}",
+                headers=app.headers,
+                timeout=4,
+            )
+            r.raise_for_status()
+            self.detail = r.json()
+        except requests.RequestException as e:
+            self.detail = {"error": str(e)}
+        self.redraw()
+
+    def redraw(self) -> None:
+        d = self.detail
+        out = Text()
+        if d.get("error"):
+            out.append(d["error"], style="#ff5f56")
+            self.query_one("#detail", Static).update(out)
+            return
+        info = d.get("info", {})
+        mark = "▶" if d.get("running") else (
+            "✓" if info.get("status") == "success" else "·"
+        )
+        out.append(
+            f"{mark} {info.get('taskId')} {info.get('title', '')}\n",
+            style="bold #ffb347",
+        )
+        p = d.get("plane", {})
+        if p.get("linked"):
+            out.append(
+                f"  {p.get('project')} › {p.get('milestone')} › {p.get('issue')}\n\n",
+                style="#ff2bd6",
+            )
+        else:
+            out.append(f"  {p.get('reason', 'unplanned')}\n\n", style="dim")
+        events = d.get("events", [])
+        out.append(f"TRANSCRIPT · {len(events)} events\n", style="bold #ffb347")
+        for e in events[-40:]:
+            stamp = time.strftime("%H:%M:%S", time.localtime(e.get("ts", 0)))
+            out.append(f"  {stamp} ", style="dim")
+            if e["type"] == "log":
+                style = "#ff5f56" if e.get("level") == "error" else "#cfe8f5"
+                out.append(f"{e.get('line', '')}\n", style=style)
+            elif e["type"] == "file_diff":
+                out.append(f"⇄ diff {e.get('path')}\n", style="#00e5ff")
+            elif e["type"] == "task_start":
+                out.append("▶ task started\n", style="#7ddc8a")
+            elif e["type"] == "task_done":
+                out.append(f"■ done — {e.get('status')}\n", style="#7ddc8a")
+            else:
+                out.append(f"{e['type']}\n")
+        self.query_one("#detail", Static).update(out)
+
+
 class VaultTop(App):
     BINDINGS = [
         ("q", "quit", "quit"),
         ("1", "toggle_worker(0)", "worker 1"),
         ("2", "toggle_worker(1)", "worker 2"),
         ("o", "open_issue", "open in Plane"),
+        ("up", "move(-1)", "select ↑"),
+        ("down", "move(1)", "select ↓"),
+        ("enter", "drill", "drill down"),
     ]
     CSS = "Screen {background: #04060c;} Static {padding: 1 2;}"
 
@@ -45,6 +124,22 @@ class VaultTop(App):
         self.headers = {"Authorization": f"Bearer {env.get('HERMES_API_TOKEN', '')}"}
         self.state: dict = {}
         self.tick = 0
+        self.cursor = 0
+
+    def _tasks(self) -> list[dict]:
+        return list(self.state.get("runningTasks", [])) + list(
+            self.state.get("history", [])
+        )
+
+    def action_move(self, delta: int) -> None:
+        n = len(self._tasks())
+        if n:
+            self.cursor = (self.cursor + delta) % n
+
+    def action_drill(self) -> None:
+        tasks = self._tasks()
+        if tasks:
+            self.push_screen(TaskScreen(tasks[self.cursor]["taskId"]))
 
     def compose(self) -> ComposeResult:
         yield Static(id="deck")

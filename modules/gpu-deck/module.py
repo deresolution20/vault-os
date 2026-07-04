@@ -35,9 +35,22 @@ router = APIRouter()
 
 _running: dict[str, dict] = {}  # taskId -> info
 _history: list[dict] = []  # most recent first
+# drill-down transcripts: every event a task emitted, capped per task;
+# pruned alongside history so memory stays bounded
+_task_events: dict[str, list[dict]] = {}
+TASK_EVENT_CAP = 500
+
+
+def _record(task_id: str, event) -> None:
+    log = _task_events.setdefault(task_id, [])
+    log.append(event.model_dump(exclude_none=True))
+    del log[:-TASK_EVENT_CAP]
 
 
 async def _on_event(event) -> None:
+    task_id = getattr(event, "taskId", None)
+    if task_id:
+        _record(task_id, event)
     if isinstance(event, TaskStartEvent):
         _running[event.taskId] = {
             "taskId": event.taskId,
@@ -57,6 +70,11 @@ async def _on_event(event) -> None:
         )
         _history.insert(0, info)
         del _history[HISTORY_LIMIT:]
+        # prune transcripts of tasks that fell off the history window
+        keep = set(_running) | {h["taskId"] for h in _history}
+        for tid in list(_task_events):
+            if tid not in keep:
+                del _task_events[tid]
 
 
 # ── GPU hardware truth (sysfs + nvidia-smi) ─────────────────────────────
@@ -256,6 +274,22 @@ async def deck_state() -> dict:
     }
 
 
+@router.get("/task/{task_id}")
+async def task_detail(task_id: str) -> dict:
+    """Drill-down: a task's info, Plane chain, and full event transcript."""
+    info = _running.get(task_id) or next(
+        (h for h in _history if h["taskId"] == task_id), None
+    )
+    if info is None and task_id not in _task_events:
+        raise HTTPException(404, f"unknown task: {task_id}")
+    return {
+        "info": info or {"taskId": task_id},
+        "running": task_id in _running,
+        "plane": await _plane_chain(task_id),
+        "events": _task_events.get(task_id, []),
+    }
+
+
 @router.post("/workers/{unit}/{action}")
 async def worker_control(unit: str, action: str) -> dict:
     """Light controls: start/stop the VAULT worker user-units only."""
@@ -278,6 +312,6 @@ def register(registry: ModuleRegistry, bus: EventBus) -> None:
             name="GPU Deck",
             router=router,
             event_types=[],
-            panel=MODULE_ID,
+            panel=None,  # deck is docked into the core HUD; window via open_deck
         )
     )

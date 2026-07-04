@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { VaultEvent, VaultGraph } from "@vault/shared/events";
 import { fetchGraph, fetchModules, subscribeEvents } from "./api";
+import DeckView from "./deck/DeckView";
 import VaultGraphScene, { FgNode } from "./graph/VaultGraph";
 import { ModuleManifestEntry, panelRegistry } from "./modules/loader";
 import NotePanel from "./panels/NotePanel";
@@ -53,7 +54,11 @@ export default function App() {
   useEffect(() => {
     const w = getCurrentWindow();
     const onKey = async (e: KeyboardEvent) => {
-      if (e.key === "Escape") await w.setFullscreen(false);
+      if (e.key === "Escape") {
+        // when a deck drill-down is open, Esc backs out of it instead
+        if (document.querySelector(".deck-detail")) return;
+        await w.setFullscreen(false);
+      }
       else if (e.key === "F11") await w.setFullscreen(!(await w.isFullscreen()));
       else if (e.key.toLowerCase() === "q" && e.ctrlKey) await invoke("quit_app");
     };
@@ -125,6 +130,16 @@ export default function App() {
           </span>
         )}
       </div>
+
+      <aside className="deck-dock">
+        <button
+          className="deck-btn deck-popout"
+          onClick={() => invoke("open_deck").catch(console.error)}
+        >
+          pop out ↗
+        </button>
+        <DeckView docked />
+      </aside>
 
       <div className="vitals-strip">
         {Object.entries(vitals).map(([k, v]) => (
