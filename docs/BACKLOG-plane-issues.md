@@ -37,13 +37,13 @@ own inference, not a build workforce).
 | M4.4 | Bearer auth + localhost-only bind | easy | **done 2026-07-03** — bearer auth REST+WS, loopback bind, /health open | M4.1 | |
 | M5.1 | ROCm 7.2.x + llama-server Vulkan on R9700 (worker 1) | hard | todo — **only R9700 installed now** | — | coordinate `projects/r9700-kernel` |
 | M5.1b | Second Vulkan worker on 7900 XTX | hard | **waits for card (~Jul 7)** | M5.1 | |
-| M5.2 | Model router: route by difficulty tag + health checks | medium | todo | M5.1 | full balancing needs both cards |
-| M5.3 | Local-first paid-API fallback + savings metric | medium | todo | M5.2 | ⚠ burns paid credits — confirm with Brice before load-testing |
+| M5.2 | Model router: route by difficulty tag + health checks | medium | **code done 2026-07-04** — lanes/health/difficulty routing, mocked tests; live balancing awaits both cards | M5.1 | full balancing needs both cards |
+| M5.3 | Local-first paid-API fallback + savings metric | medium | **code done 2026-07-04** — fallback + token ledger, mocked; real paid call awaits Brice approval | M5.2 | ⚠ burns paid credits — confirm with Brice before load-testing |
 | M5.4 | (opt) vLLM-ROCm TP=1 recipe doc, R9700 only | easy | todo | M5.1 | never TP≥2 |
-| M6.1 | Sub-agents emit task/diff/log events → Live Build panel | medium | todo | M4.3 | |
-| M6.2 | Plane outbound issues + inbound webhook | medium | outbound one-shot mirror done; live create/update-on-task + inbound webhook todo | M4.1 | push tool ready: `tools/push_backlog_to_plane.py` |
-| M6.3 | Grafana embed in System Vitals ("resource", not activity) | easy | todo | — | needs GRAFANA_EMBED_URL |
-| M6.4 | System vitals strip | easy | todo | M4.3 | |
-| M7.1 | Module contract defined + one loaded example | medium | **sketched 2026-07-03** (`docs/MODULE-CONTRACT.md`, `modules.py`) | — | example module = M7.3 |
+| M6.1 | Sub-agents emit task/diff/log events → Live Build panel | medium | **done 2026-07-04** — POST /events + emit_build_events.py + Live Build panel; demo verified | M4.3 | |
+| M6.2 | Plane outbound issues + inbound webhook | medium | **done 2026-07-04** — task_start→RUN issue→completed live-verified; inbound webhook re-emits (dispatcher = Hermes wiring later) | M4.1 | push tool ready: `tools/push_backlog_to_plane.py` |
+| M6.3 | Grafana embed in System Vitals ("resource", not activity) | easy | **done (code) 2026-07-04** — module + iframe panel; needs GRAFANA_EMBED_URL from Brice to render | — | needs GRAFANA_EMBED_URL |
+| M6.4 | System vitals strip | easy | **done 2026-07-04** — vitals loop → HUD strip, labeled resource-not-activity | M4.3 | |
+| M7.1 | Module contract defined + one loaded example | medium | **done 2026-07-04** — contract + filesystem discovery + 4 loaded modules | — | example module = M7.3 |
 | M7.2 | Refactor RAG/write/serving/telemetry as modules | medium | todo | M7.1, M4, M5, M6 | |
-| M7.3 | hello-module stub (route + event + panel, drop-in proof) | easy | todo | M7.1 | |
+| M7.3 | hello-module stub (route + event + panel, drop-in proof) | easy | **done 2026-07-04** — hello-module: route+event+panel, zero core edits, tested | M7.1 | |
