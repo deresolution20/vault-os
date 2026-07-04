@@ -184,7 +184,7 @@ def _cloud_state() -> list[dict]:
         pass
     try:
         live = json.loads(CLOUD_LIVE.read_text())
-        for model in live.get("inFlightModels", []):
+        for model in live.get("inFlightModels", []):  # legacy + current key
             m = per_model.setdefault(
                 model,
                 {
@@ -485,6 +485,26 @@ async def deck_state() -> dict:
         "throughput": _throughput(),
         "cloud": _cloud_state(),
     }
+
+
+@router.get("/cloud-live")
+async def cloud_live() -> dict:
+    """Cheap, poll-friendly: is the cloud orchestrator thinking RIGHT NOW."""
+    import json
+
+    try:
+        live = json.loads(CLOUD_LIVE.read_text())
+    except (FileNotFoundError, ValueError):
+        live = {}
+    now = time.time()
+    in_flight = [
+        {
+            "model": e.get("model"),
+            "elapsedS": round(now - e.get("startedTs", now), 1),
+        }
+        for e in live.get("inFlight", [])
+    ]
+    return {"inFlight": in_flight}
 
 
 @router.get("/task/{task_id}")

@@ -40,13 +40,22 @@ HOP = {
 
 app = FastAPI()
 client = httpx.AsyncClient(base_url=UPSTREAM, timeout=httpx.Timeout(600.0))
-_in_flight: dict[int, str] = {}  # id(request) -> model
+_in_flight: dict[int, dict] = {}  # id(request) -> {"model", "startedTs"}
 _lock = asyncio.Lock()
 
 
 def _write_live() -> None:
     LIVE.parent.mkdir(parents=True, exist_ok=True)
-    LIVE.write_text(json.dumps({"inFlightModels": list(_in_flight.values())}))
+    entries = list(_in_flight.values())
+    LIVE.write_text(
+        json.dumps(
+            {
+                # legacy key kept for older readers
+                "inFlightModels": [e["model"] for e in entries],
+                "inFlight": entries,
+            }
+        )
+    )
 
 
 def _append_stat(rec: dict) -> None:
@@ -96,7 +105,7 @@ async def relay(request: Request, path: str) -> Response:
     key = id(request)
     async with _lock:
         if model:
-            _in_flight[key] = model
+            _in_flight[key] = {"model": model, "startedTs": started}
             _write_live()
 
     async def finish(status: int, tokens_in, tokens_out, approx: bool) -> None:

@@ -239,6 +239,7 @@ class VaultTop(App):
     CSS = f"""
     Screen {{ background: #04060c; }}
     #deck {{ padding: 1 2; height: 1fr; }}
+    #orchline {{ height: 1; padding: 0 2; background: #060a12; }}
     #transcript {{
         height: 12; border-top: solid {CYAN} 30%;
         background: #04060c; color: #cfe8f5; padding: 0 2; display: none;
@@ -248,6 +249,8 @@ class VaultTop(App):
         background: #060a12; color: {AMBER};
     }}
     """
+
+    TAG_COLORS = [CYAN, MAGENTA, GREEN, "#7ddcff", "#c792ea", AMBER]
 
     def __init__(self) -> None:
         super().__init__()
@@ -259,6 +262,7 @@ class VaultTop(App):
         self.tick = 0
         self.cursor = 0
         self.active_task: str | None = None
+        self.cloud_live: list | None = []  # None = poll error
         # plain-text mirror of the transcript (drives tests + future export)
         self.transcript_lines: list[str] = []
 
@@ -267,6 +271,7 @@ class VaultTop(App):
     def compose(self) -> ComposeResult:
         yield Vertical(
             Static(id="deck"),
+            Static(id="orchline"),
             RichLog(id="transcript", markup=False, wrap=True, max_lines=500),
         )
         yield Input(
@@ -278,8 +283,10 @@ class VaultTop(App):
 
     def on_mount(self) -> None:
         self.set_interval(5.0, self.refresh_state)
+        self.set_interval(1.5, self.refresh_cloud_live)
         self.set_interval(0.12, self.redraw)
         self.refresh_state()
+        self.refresh_cloud_live()
         self.listen_events()
         self.query_one("#prompt", Input).focus()
 
@@ -300,6 +307,24 @@ class VaultTop(App):
 
     def _set_state(self, state: dict) -> None:
         self.state = state
+
+    @work(thread=True, exclusive=True, group="cloud-live")
+    def refresh_cloud_live(self) -> None:
+        """Fast poll: is the cloud orchestrator thinking right now."""
+        try:
+            r = requests.get(
+                f"{self.api}/modules/gpu-deck/cloud-live",
+                headers=self.headers,
+                timeout=3,
+            )
+            r.raise_for_status()
+            live = r.json().get("inFlight", [])
+        except requests.RequestException:
+            live = None
+        self.call_from_thread(self._set_cloud_live, live)
+
+    def _set_cloud_live(self, live: list | None) -> None:
+        self.cloud_live = live
 
     @work(group="ws")
     async def listen_events(self) -> None:
@@ -323,17 +348,22 @@ class VaultTop(App):
                 self._log_line(Text("bus ○ down — retrying…", style="dim"))
                 await asyncio.sleep(3)
 
+    def _tag(self, task_id: str) -> Text:
+        color = self.TAG_COLORS[hash(task_id) % len(self.TAG_COLORS)]
+        return Text(f"[{task_id[-10:]}] ", style=f"bold {color}")
+
     def _on_bus_event(self, e: dict) -> None:
         tid = e.get("taskId")
         if e.get("type") == "task_start" and tid:
-            # follow whatever starts if nothing is active
-            if self.active_task is None:
-                self.active_task = tid
-                self._show_transcript(True)
-        if tid and tid == self.active_task:
-            self._append_event(e)
-        if e.get("type") == "task_done" and tid == self.active_task:
-            self.active_task = None
+            # Esc targets the most recently started task
+            self.active_task = tid
+            self._show_transcript(True)
+        if tid:
+            # multiplexed: every agent's events stream in, tagged per task
+            self._append_event(e, self._tag(tid))
+        if e.get("type") == "task_done":
+            if tid == self.active_task:
+                self.active_task = None
             self.refresh_state()
 
     # ── transcript pane ─────────────────────────────────────────────────
@@ -351,19 +381,25 @@ class VaultTop(App):
             self._show_transcript(True)
         log.write(text)
 
-    def _append_event(self, e: dict) -> None:
+    def _append_event(self, e: dict, tag: Text | None = None) -> None:
         t = e["type"]
         if t == "log":
             style = RED if e.get("level") == "error" else "#cfe8f5"
-            self._log_line(Text(e.get("line", ""), style=style))
+            body = Text(e.get("line", ""), style=style)
         elif t == "task_start":
-            self._log_line(
-                Text(f"▶ {e.get('taskId')} {e.get('title', '')}", style=GREEN)
-            )
+            body = Text(f"▶ {e.get('title', '')}", style=GREEN)
         elif t == "task_done":
-            self._log_line(Text(f"■ done — {e.get('status')}", style=GREEN))
+            body = Text(f"■ done — {e.get('status')}", style=GREEN)
         elif t == "file_diff":
-            self._log_line(Text(f"⇄ diff {e.get('path')}", style=CYAN))
+            body = Text(f"⇄ diff {e.get('path')}", style=CYAN)
+        else:
+            return
+        if tag is not None:
+            line = tag.copy()
+            line.append_text(body)
+        else:
+            line = body
+        self._log_line(line)
 
     # ── command deck ────────────────────────────────────────────────────
 
@@ -525,8 +561,30 @@ class VaultTop(App):
 
     # ── deck redraw ─────────────────────────────────────────────────────
 
+    def _redraw_orchline(self) -> None:
+        line = Text()
+        live = self.cloud_live
+        if live is None:
+            line.append("ORCHESTRATOR ", style=f"bold {AMBER}")
+            line.append("? relay unreachable", style="dim")
+        elif live:
+            spin = SPIN[self.tick % len(SPIN)]
+            line.append("ORCHESTRATOR ", style=f"bold {AMBER}")
+            line.append(f"{spin} thinking ", style=f"bold {MAGENTA}")
+            line.append(
+                " · ".join(
+                    f"{e.get('model')} {e.get('elapsedS', 0):.0f}s" for e in live
+                ),
+                style=CYAN,
+            )
+        else:
+            line.append("ORCHESTRATOR ", style=f"bold {AMBER}")
+            line.append("○ idle", style="dim")
+        self.query_one("#orchline", Static).update(line)
+
     def redraw(self) -> None:
         self.tick += 1
+        self._redraw_orchline()
         s = self.state
         out = Text()
         out.append("VAULT · GPU DECK\n", style=f"bold {AMBER}")
