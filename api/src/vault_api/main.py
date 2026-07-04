@@ -32,6 +32,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="VAULT Hermes API", version="0.1.0", lifespan=lifespan)
 
+# The HUD webview is a different origin (vite dev / tauri://) than this API,
+# so browser fetch() needs CORS. Local UI origins only — never "*".
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:1420",  # vite dev server (tauri dev)
+        "tauri://localhost",  # bundled app (linux/mac)
+        "http://tauri.localhost",  # bundled app (windows)
+    ],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
 
 @app.get("/health")
 async def health() -> dict:

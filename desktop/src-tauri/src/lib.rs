@@ -80,6 +80,13 @@ fn report_spike(result: String) -> Result<(), String> {
     Ok(())
 }
 
+/// ctrl+Q from the webview — exits through the normal path so the sidecar
+/// gets reaped (RunEvent::Exit).
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
 fn toggle_hud(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         if w.is_visible().unwrap_or(false) {
@@ -171,7 +178,12 @@ pub fn run() {
                 })
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![report_spike, get_config, read_note])
+        .invoke_handler(tauri::generate_handler![
+            report_spike,
+            get_config,
+            read_note,
+            quit_app
+        ])
         .setup(|app| {
             // tray: toggle + quit (M0.2)
             let toggle = MenuItem::with_id(app, "toggle", "Show/Hide HUD", true, None::<&str>)?;

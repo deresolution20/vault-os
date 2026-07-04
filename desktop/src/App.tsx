@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { VaultEvent, VaultGraph } from "@vault/shared/events";
 import { fetchGraph, subscribeEvents } from "./api";
 import VaultGraphScene, { FgNode } from "./graph/VaultGraph";
@@ -19,30 +20,55 @@ export default function App() {
     fetchGraph().then(setGraph).catch((e) => console.error("graph:", e));
   }, []);
 
-  // initial load — retry until the sidecar API is up
+  // initial load — keep retrying until the sidecar API answers; surface the
+  // last error in the HUD instead of a silent "connecting…" forever
+  const [apiError, setApiError] = useState<string>("");
   useEffect(() => {
-    let tries = 0;
-    const t = setInterval(() => {
-      tries += 1;
+    let stop = false;
+    const tick = () => {
+      if (stop) return;
       fetchGraph()
         .then((g) => {
           setGraph(g);
-          clearInterval(t);
+          setApiError("");
         })
-        .catch(() => {
-          if (tries > 30) clearInterval(t);
+        .catch((e) => {
+          setApiError(String(e));
+          setTimeout(tick, 2000);
         });
-    }, 1000);
-    return () => clearInterval(t);
+    };
+    tick();
+    return () => {
+      stop = true;
+    };
   }, []);
 
-  // live growth: vault changes re-pull the graph (M2.3 → M3)
+  // escape hatches: Esc leaves fullscreen, F11 toggles it, ctrl+Q quits
+  useEffect(() => {
+    const w = getCurrentWindow();
+    const onKey = async (e: KeyboardEvent) => {
+      if (e.key === "Escape") await w.setFullscreen(false);
+      else if (e.key === "F11") await w.setFullscreen(!(await w.isFullscreen()));
+      else if (e.key.toLowerCase() === "q" && e.ctrlKey) await invoke("quit_app");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // live growth: vault changes re-pull the graph (M2.3 → M3); also re-pull
+  // whenever the bus (re)connects — the API is definitely up at that moment
   useEffect(
     () =>
-      subscribeEvents((e: VaultEvent) => {
-        setLastEvent(`${e.type} · ${"nodeId" in e ? e.nodeId : e.source}`);
-        if (e.type === "node_update") loadGraph();
-      }, setWsUp),
+      subscribeEvents(
+        (e: VaultEvent) => {
+          setLastEvent(`${e.type} · ${"nodeId" in e ? e.nodeId : e.source}`);
+          if (e.type === "node_update") loadGraph();
+        },
+        (up) => {
+          setWsUp(up);
+          if (up) loadGraph();
+        }
+      ),
     [loadGraph]
   );
 
@@ -70,6 +96,8 @@ export default function App() {
             ? `${graph.nodes.length} nodes · ${graph.links.length} links`
             : "connecting to hermes…"}
         </span>
+        {!graph && apiError && <span className="bad">{apiError}</span>}
+        <span className="hud-hint">esc window · F11 fullscreen · ctrl+Q quit</span>
         <span className="hud-line">
           bus {wsUp ? "● live" : "○ down"}
           {lastEvent && ` · ${lastEvent}`}

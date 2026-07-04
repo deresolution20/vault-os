@@ -41,6 +41,11 @@ body,
   color: #ff5f56;
 }
 
+.hud-hint {
+  font-size: 11px;
+  opacity: 0.45;
+}
+
 /* ── note side panel ──────────────────────────────────────────────────── */
 .note-panel {
   position: fixed;

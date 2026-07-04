@@ -38,3 +38,26 @@ def test_ws_requires_token(client):
 
     with client.websocket_connect("/ws/events?token=sekrit") as ws:
         assert ws.receive_json()["type"] == "log"
+
+
+def test_cors_preflight_and_origin(client):
+    """Regression: the webview origin must pass CORS or the graph never loads."""
+    r = client.options(
+        "/graph",
+        headers={
+            "Origin": "http://localhost:1420",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "http://localhost:1420"
+    r = client.get(
+        "/graph",
+        headers={
+            "Origin": "http://localhost:1420",
+            "Authorization": "Bearer sekrit",
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "http://localhost:1420"
