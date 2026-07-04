@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 # vault-top — terminal GPU deck (Textual). Same data/controls as the window.
+# Works via symlink (e.g. ~/.local/bin/vault-top): resolve the real path.
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 exec uv run --with textual --with requests \
-  python3 "$(dirname "${BASH_SOURCE[0]}")/vault_top.py" "$@"
+  python3 "$(dirname "$SELF")/vault_top.py" "$@"
