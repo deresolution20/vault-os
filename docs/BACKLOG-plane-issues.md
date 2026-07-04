@@ -35,9 +35,9 @@ own inference, not a build workforce).
 | M4.2 | Wire writes to obsidian-local-rest-api + cyanheads MCP | medium | **done 2026-07-03** — create+PATCH e2e via HTTPS 27124; write → watcher → graph node verified | M4.1 | plugin 4.1.3 installed (Brice-approved), key in .env |
 | M4.3 | WS /ws/events + connection manager fan-out | medium | **done 2026-07-03** — WS bus fan-out, e2e <500ms in watcher test | M0.3 | `bus.py` |
 | M4.4 | Bearer auth + localhost-only bind | easy | **done 2026-07-03** — bearer auth REST+WS, loopback bind, /health open | M4.1 | |
-| M5.1 | ROCm 7.2.x + llama-server Vulkan on R9700 (worker 1) | hard | todo — **only R9700 installed now** | — | coordinate `projects/r9700-kernel` |
+| M5.1 | ROCm 7.2.x + llama-server Vulkan on R9700 (worker 1) | hard | **done 2026-07-04** — llama.cpp b9870 Vulkan, qwen3-32B q4, 25 tok/s, idles correctly (no HIP pin); worker start-on-demand | — | coordinate `projects/r9700-kernel` |
 | M5.1b | Second Vulkan worker on 7900 XTX | hard | **waits for card (~Jul 7)** | M5.1 | |
-| M5.2 | Model router: route by difficulty tag + health checks | medium | **code done 2026-07-04** — lanes/health/difficulty routing, mocked tests; live balancing awaits both cards | M5.1 | full balancing needs both cards |
+| M5.2 | Model router: route by difficulty tag + health checks | medium | **done (single-lane live) 2026-07-04** — hard→r9700 verified via /llm/complete; dual-lane balancing waits for 7900 XTX | M5.1 | full balancing needs both cards |
 | M5.3 | Local-first paid-API fallback + savings metric | medium | **code done 2026-07-04** — fallback + token ledger, mocked; real paid call awaits Brice approval | M5.2 | ⚠ burns paid credits — confirm with Brice before load-testing |
 | M5.4 | (opt) vLLM-ROCm TP=1 recipe doc, R9700 only | easy | todo | M5.1 | never TP≥2 |
 | M6.1 | Sub-agents emit task/diff/log events → Live Build panel | medium | **done 2026-07-04** — POST /events + emit_build_events.py + Live Build panel; demo verified | M4.3 | |
