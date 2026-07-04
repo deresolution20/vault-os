@@ -438,6 +438,12 @@ class VaultTop(App):
             self.ask_router(line[5:])
         elif line == "/reset-cloud":
             self.reset_cloud()
+        elif line == "/reset-ledger":
+            self.reset_ledger()
+        elif line == "/clear":
+            self.query_one("#transcript", RichLog).clear()
+            self.transcript_lines.clear()
+            self._show_transcript(False)
         elif line.startswith("/"):
             self._log_line(Text(f"unknown command: {line}", style=RED))
         else:
@@ -512,12 +518,53 @@ class VaultTop(App):
             )
         self.refresh_state()
 
+    @work(thread=True, group="dispatch")
+    def reset_ledger(self) -> None:
+        """/reset-ledger — zero the local/paid router token counters."""
+        try:
+            r = requests.post(
+                f"{self.api}/llm/ledger/reset", headers=self.headers, timeout=10
+            )
+            r.raise_for_status()
+            prev = r.json().get("previous", {})
+            self.call_from_thread(
+                self._log_line,
+                Text(
+                    f"ledger reset — was local {prev.get('localTokens', 0)} / "
+                    f"paid {prev.get('paidTokens', 0)} tok",
+                    style=AMBER,
+                ),
+            )
+        except requests.RequestException as e:
+            self.call_from_thread(
+                self._log_line, Text(f"reset failed: {e}", style=RED)
+            )
+        self.refresh_state()
+
     def action_cancel_task(self) -> None:
-        if not self.active_task:
+        """Esc, layered: cancel a running task → else dismiss the transcript
+        pane → else just refocus the prompt (never a dead key)."""
+        if self.active_task:
+            tid = self.active_task
+            self._log_line(Text(f"✋ cancelling {tid}…", style=AMBER))
+            self._cancel(tid)
             return
-        tid = self.active_task
-        self._log_line(Text(f"✋ cancelling {tid}…", style=AMBER))
-        self._cancel(tid)
+        transcript = self.query_one("#transcript", RichLog)
+        if transcript.styles.display != "none":
+            self._show_transcript(False)
+        self.query_one("#prompt", Input).focus()
+
+    def on_key(self, event) -> None:
+        """Typing anywhere on the main screen lands in the prompt — focus can
+        never get stuck on the transcript/footer."""
+        if isinstance(self.screen, TaskScreen):
+            return
+        prompt = self.query_one("#prompt", Input)
+        ch = getattr(event, "character", None)
+        if ch and ch.isprintable() and not prompt.has_focus:
+            prompt.focus()
+            prompt.insert_text_at_cursor(ch)
+            event.stop()
 
     @work(thread=True, group="dispatch")
     def _cancel(self, task_id: str) -> None:

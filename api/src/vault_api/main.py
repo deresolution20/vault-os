@@ -178,6 +178,16 @@ async def llm_ledger() -> dict:
     return model_router.ledger.as_dict()
 
 
+@app.post("/llm/ledger/reset", dependencies=[auth_required])
+async def llm_ledger_reset() -> dict:
+    """Zero the local/paid token ledger (testing)."""
+    from .router import TokenLedger, model_router
+
+    old = model_router.ledger.as_dict()
+    model_router.ledger = TokenLedger()
+    return {"reset": True, "previous": old}
+
+
 @app.post("/events", status_code=202, dependencies=[auth_required])
 async def ingest_event(event: dict) -> dict:
     """M6.1 — agents push task_start/file_diff/log/task_done here; the bus
