@@ -1,0 +1,17 @@
+# M5.1 — VAULT R9700 llama.cpp-Vulkan worker (user unit)
+# Install: cp to ~/.config/systemd/user/ && systemctl --user daemon-reload
+# Start on demand: systemctl --user start vault-worker-r9700
+# NOT boot-enabled on purpose: the R9700 is shared with ollama until the
+# 7900 XTX arrives; the launcher script refuses to start into a VRAM squeeze.
+[Unit]
+Description=VAULT worker #1 - llama.cpp Vulkan on AMD R9700 (:8081)
+After=network.target
+
+[Service]
+Type=exec
+ExecStart=/bin/bash /home/brice/Claude_Code_Projects/projects/vault-os/tools/run_worker_r9700.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
