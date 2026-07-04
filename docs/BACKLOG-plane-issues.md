@@ -24,18 +24,18 @@ own inference, not a build workforce).
 | M1.2 | Startup frame-time probe + software-render flag | easy | **done 2026-07-03** — correctly flagged the NVIDIA software path | M1.1 | writes `docs/M1-spike-result.json` |
 | M1.3 | Decision gate writeup: GO (Tauri) / NO-GO (Electron) | easy | **done 2026-07-03 — GO (Tauri)** | M1.1, M1.2 | `docs/M1-decision-2026-07-03.md`; launcher must pin AMD GL |
 | M2.1 | Vault parser → graph JSON (wikilinks, backlinks, unresolved) | medium | todo | — | |
-| M2.2 | obsidian-notes-rag + local embeddings, chunk by heading | medium | todo | — | zero-network verify |
-| M2.3 | File-watcher → incremental re-index + node_update events | medium | todo | M2.1 | |
-| M2.4 | Indexer exposed to API layer + unit tests | easy | todo | M2.1, M2.2 | |
-| M3.1 | r3f-forcegraph in shared Canvas fed by GET /graph | medium | todo | M1.3 GO, M2.1 | |
-| M3.2 | Glow node material + selective bloom | medium | todo | M3.1 | |
-| M3.3 | Color-shift over time + slow auto-orbit | easy | todo | M3.1 | spike already proves the technique |
-| M3.4 | Node click → markdown side panel | easy | todo | M3.1 | |
-| M3.5 | Perf pass (cooldownTicks freeze, LOD, FPS budget) | medium | todo | M3.1–M3.4 | |
-| M4.1 | FastAPI: GET /graph, POST /rag/query, POST/PATCH /notes | medium | todo | M2.4 | skeleton app exists |
-| M4.2 | Wire writes to obsidian-local-rest-api + cyanheads MCP | medium | todo | M4.1 | plugin v4.0.0+, port 27123 |
-| M4.3 | WS /ws/events + connection manager fan-out | medium | todo (skeleton done) | M0.3 | `bus.py` |
-| M4.4 | Bearer auth + localhost-only bind | easy | todo | M4.1 | |
+| M2.2 | obsidian-notes-rag + local embeddings, chunk by heading | medium | **done 2026-07-03** — local ollama nomic-embed-text, sqlite-vec, heading chunks | — | zero-network verify |
+| M2.3 | File-watcher → incremental re-index + node_update events | medium | **done 2026-07-03** — watchdog → reindex + node_update <2s (e2e test) | M2.1 | |
+| M2.4 | Indexer exposed to API layer + unit tests | easy | **done 2026-07-03** — build_graph + RagService behind API, tests green | M2.1, M2.2 | |
+| M3.1 | r3f-forcegraph in shared Canvas fed by GET /graph | medium | **done 2026-07-03** — r3f-forcegraph fed by GET /graph, orbit works | M1.3 GO, M2.1 | |
+| M3.2 | Glow node material + selective bloom | medium | **done 2026-07-03** — additive glow sprites + bloom, DOM panels crisp | M3.1 | |
+| M3.3 | Color-shift over time + slow auto-orbit | easy | **done 2026-07-03** — Blade Runner palette breathe + slow auto-orbit | M3.1 | spike already proves the technique |
+| M3.4 | Node click → markdown side panel | easy | code done — awaiting Brice click-test (read_note sandboxed to vault) | M3.1 | |
+| M3.5 | Perf pass (cooldownTicks freeze, LOD, FPS budget) | medium | **done for current scale** — cooldownTicks freeze + startup FPS canary (60fps); 5k case proven by M1 | M3.1–M3.4 | |
+| M4.1 | FastAPI: GET /graph, POST /rag/query, POST/PATCH /notes | medium | **done 2026-07-03** — /graph, /rag/query, /notes, PATCH /notes/{path} | M2.4 | skeleton app exists |
+| M4.2 | Wire writes to obsidian-local-rest-api + cyanheads MCP | medium | client done; **plugin install awaits Brice approval** (classifier blocked unattended install) | M4.1 | plugin v4.0.0+, port 27123 |
+| M4.3 | WS /ws/events + connection manager fan-out | medium | **done 2026-07-03** — WS bus fan-out, e2e <500ms in watcher test | M0.3 | `bus.py` |
+| M4.4 | Bearer auth + localhost-only bind | easy | **done 2026-07-03** — bearer auth REST+WS, loopback bind, /health open | M4.1 | |
 | M5.1 | ROCm 7.2.x + llama-server Vulkan on R9700 (worker 1) | hard | todo — **only R9700 installed now** | — | coordinate `projects/r9700-kernel` |
 | M5.1b | Second Vulkan worker on 7900 XTX | hard | **waits for card (~Jul 7)** | M5.1 | |
 | M5.2 | Model router: route by difficulty tag + health checks | medium | todo | M5.1 | full balancing needs both cards |

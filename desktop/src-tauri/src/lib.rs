@@ -14,6 +14,54 @@ struct Sidecar(Mutex<Option<Child>>);
 
 const HOTKEY: &str = "ctrl+shift+v";
 
+/// Repo root (dev layout: this crate sits at desktop/src-tauri).
+fn project_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+}
+
+fn env_from_project(key: &str) -> Option<String> {
+    // process env wins; fall back to the project .env
+    if let Ok(v) = std::env::var(key) {
+        return Some(v);
+    }
+    dotenvy::from_path_iter(project_root().join(".env"))
+        .ok()?
+        .flatten()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v)
+}
+
+/// Front-end bootstrap config: where the Hermes API lives + its token.
+/// Local-only secret handed to our own webview — never leaves the box.
+#[tauri::command]
+fn get_config() -> serde_json::Value {
+    let port = env_from_project("HERMES_API_PORT").unwrap_or_else(|| "8100".into());
+    serde_json::json!({
+        "apiUrl": format!("http://127.0.0.1:{port}"),
+        "wsUrl": format!("ws://127.0.0.1:{port}/ws/events"),
+        "token": env_from_project("HERMES_API_TOKEN").unwrap_or_default(),
+        "vaultPath": env_from_project("VAULT_PATH").unwrap_or_default(),
+    })
+}
+
+/// M3.4 — read a note's markdown for the side panel. Path must resolve
+/// inside the vault (no traversal out of it).
+#[tauri::command]
+fn read_note(path: String) -> Result<String, String> {
+    let vault = std::path::PathBuf::from(
+        env_from_project("VAULT_PATH").ok_or("VAULT_PATH not configured")?,
+    )
+    .canonicalize()
+    .map_err(|e| e.to_string())?;
+    let target = std::path::Path::new(&path)
+        .canonicalize()
+        .map_err(|e| format!("{path}: {e}"))?;
+    if !target.starts_with(&vault) {
+        return Err("path escapes vault".into());
+    }
+    std::fs::read_to_string(&target).map_err(|e| e.to_string())
+}
+
 /// M1.2 — receive the frame-probe result from the webview, persist it, and
 /// (when SPIKE_AUTOEXIT=1) quit so the spike can run unattended. The probe
 /// stays in the app as a startup canary for driver/glvnd regressions (M1.3).
@@ -123,7 +171,7 @@ pub fn run() {
                 })
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![report_spike])
+        .invoke_handler(tauri::generate_handler![report_spike, get_config, read_note])
         .setup(|app| {
             // tray: toggle + quit (M0.2)
             let toggle = MenuItem::with_id(app, "toggle", "Show/Hide HUD", true, None::<&str>)?;

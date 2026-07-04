@@ -3,7 +3,7 @@ body,
 #root {
   margin: 0;
   height: 100%;
-  background: #05060a;
+  background: #04060c;
   overflow: hidden;
 }
 
@@ -12,29 +12,115 @@ body,
   inset: 0;
 }
 
+/* ── HUD text: holographic amber, monospace ───────────────────────────── */
 .hud-overlay {
   position: fixed;
-  top: 12px;
-  left: 16px;
+  top: 14px;
+  left: 18px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-family: "JetBrains Mono", "Fira Mono", monospace;
   font-size: 13px;
-  color: #e8b959;
-  text-shadow: 0 0 6px rgba(232, 185, 89, 0.35);
+  color: #ffb347;
+  text-shadow: 0 0 8px rgba(255, 179, 71, 0.35);
   pointer-events: none;
+  z-index: 10;
 }
 
 .hud-title {
-  letter-spacing: 0.2em;
-  opacity: 0.9;
+  font-size: 15px;
+  letter-spacing: 0.35em;
 }
 
-.good {
-  color: #7ddc8a;
+.hud-line {
+  opacity: 0.85;
 }
 
 .bad {
   color: #ff5f56;
+}
+
+/* ── note side panel ──────────────────────────────────────────────────── */
+.note-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 40vw);
+  background: rgba(6, 10, 18, 0.92);
+  border-left: 1px solid rgba(0, 229, 255, 0.25);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  color: #cfe8f5;
+  font-family: "JetBrains Mono", "Fira Mono", monospace;
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.note-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 6px;
+}
+
+.note-title {
+  color: #ffb347;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 8px rgba(255, 179, 71, 0.35);
+}
+
+.note-close {
+  background: none;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: #00e5ff;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.note-close:hover {
+  background: rgba(0, 229, 255, 0.12);
+}
+
+.note-meta {
+  padding: 0 16px 10px;
+  font-size: 11px;
+  color: rgba(0, 229, 255, 0.6);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.15);
+}
+
+.note-body {
+  padding: 12px 16px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.note-body h1,
+.note-body h2,
+.note-body h3 {
+  color: #ff2bd6;
+  text-shadow: 0 0 10px rgba(255, 43, 214, 0.3);
+  letter-spacing: 0.05em;
+}
+
+.note-body a {
+  color: #00e5ff;
+}
+
+.note-body code {
+  background: rgba(0, 229, 255, 0.08);
+  color: #7ddcff;
+  padding: 1px 4px;
+}
+
+.note-body blockquote {
+  border-left: 2px solid #ff2bd6;
+  margin-left: 0;
+  padding-left: 12px;
+  opacity: 0.85;
 }
