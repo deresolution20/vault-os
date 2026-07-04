@@ -45,8 +45,12 @@ function Nodes({
     };
   }, [data]);
 
+  const frameCount = useRef(0);
   useFrame(({ clock }) => {
     fgRef.current?.tickFrame();
+    // the palette breathes at ~0.12rad/s — updating sprite colors every
+    // 3rd frame is invisible and saves per-frame material churn
+    if (frameCount.current++ % 3 !== 0) return;
     const t = clock.elapsedTime;
     for (const n of sprites.current) {
       if (!n.__sprite) continue;
