@@ -27,7 +27,7 @@ from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Input, RichLog, Static
 
@@ -51,24 +51,98 @@ def _env() -> dict:
 
 
 class TaskScreen(Screen):
-    """Drill-down: one task's transcript, polled live."""
+    """Miller-column drill-down (Claude Code /workflows style).
 
-    BINDINGS = [("escape", "app.pop_screen", "back"), ("q", "app.quit", "quit")]
+    Left pane: task list — ↑/↓ move selection, right pane live-updates.
+    →: focus the output pane (depth 2). j/k always scroll the output;
+    at depth 2 ↑/↓ scroll it too. ←: back out a level, then back to deck.
+    """
 
-    def __init__(self, task_id: str) -> None:
+    BINDINGS = [
+        ("escape", "app.pop_screen", "back"),
+        ("left", "go_left", "back"),
+        ("right", "go_right", "focus output"),
+        ("up", "nav(-1)", "↑"),
+        ("down", "nav(1)", "↓"),
+        ("j", "scroll_output(3)", "scroll ↓"),
+        ("k", "scroll_output(-3)", "scroll ↑"),
+        ("ctrl+o", "open_issue", "open in Plane"),
+        ("q", "app.quit", "quit"),
+    ]
+    CSS = f"""
+    #drill-list {{
+        width: 38; border: round {CYAN} 60%; padding: 0 1;
+        border-title-color: {AMBER};
+    }}
+    #drill-output {{
+        border: round {CYAN} 30%; padding: 0 1;
+        border-title-color: {AMBER};
+    }}
+    #drill-list.pane-focused {{ border: round {CYAN}; }}
+    #drill-output.pane-focused {{ border: round {CYAN}; }}
+    """
+
+    def __init__(self, task_ids: list[str], index: int) -> None:
         super().__init__()
-        self.task_id = task_id
+        self.task_ids = task_ids or ["?"]
+        self.index = index % len(self.task_ids)
+        self.depth = 1  # 1 = list focused, 2 = output focused
         self.detail: dict = {}
 
+    @property
+    def task_id(self) -> str:
+        return self.task_ids[self.index]
+
     def compose(self) -> ComposeResult:
-        yield VerticalScroll(Static(id="detail"))
+        yield Horizontal(
+            VerticalScroll(Static(id="list-body"), id="drill-list"),
+            VerticalScroll(Static(id="output-body"), id="drill-output"),
+        )
         yield Footer()
 
     def on_mount(self) -> None:
-        # focus the scroll container so arrows/PgUp/PgDn scroll the transcript
-        self.query_one(VerticalScroll).focus()
+        self.query_one("#drill-list").border_title = "TASKS"
+        self._mark_focus()
         self.set_interval(2.0, self.refresh_detail)
         self.refresh_detail()
+
+    # ── navigation ──────────────────────────────────────────────────────
+
+    def action_nav(self, delta: int) -> None:
+        if self.depth == 1:
+            self.index = (self.index + delta) % len(self.task_ids)
+            self.refresh_detail()
+        else:
+            self.action_scroll_output(delta * 3)
+
+    def action_go_right(self) -> None:
+        self.depth = 2
+        self._mark_focus()
+
+    def action_go_left(self) -> None:
+        if self.depth == 2:
+            self.depth = 1
+            self._mark_focus()
+        else:
+            self.app.pop_screen()
+
+    def action_scroll_output(self, lines: int) -> None:
+        self.query_one("#drill-output", VerticalScroll).scroll_relative(
+            y=lines, animate=False
+        )
+
+    def action_open_issue(self) -> None:
+        url = self.detail.get("plane", {}).get("url")
+        if url:
+            webbrowser.open(url)
+
+    def _mark_focus(self) -> None:
+        lst = self.query_one("#drill-list")
+        out = self.query_one("#drill-output")
+        lst.set_class(self.depth == 1, "pane-focused")
+        out.set_class(self.depth == 2, "pane-focused")
+
+    # ── data + render ───────────────────────────────────────────────────
 
     def refresh_detail(self) -> None:
         app: "VaultTop" = self.app  # type: ignore[assignment]
@@ -85,45 +159,67 @@ class TaskScreen(Screen):
         self.redraw()
 
     def redraw(self) -> None:
+        app: "VaultTop" = self.app  # type: ignore[assignment]
+        # left: task list with cursor
+        lst = Text()
+        for i, tid in enumerate(self.task_ids):
+            sel = "❯ " if i == self.index else "  "
+            info = next(
+                (t for t in app._tasks() if t["taskId"] == tid), {"taskId": tid}
+            )
+            mark = (
+                "▶" if info.get("startedAt") and not info.get("status")
+                else ("✓" if info.get("status") == "success" else "·")
+            )
+            style = f"bold {CYAN}" if i == self.index else "#cfe8f5"
+            lst.append(f"{sel}{mark} {tid}\n", style=style)
+            title = (info.get("title") or "")[:30]
+            if title:
+                lst.append(f"     {title}\n", style="dim")
+        self.query_one("#list-body", Static).update(lst)
+
+        # right: full transcript of the selected task
         d = self.detail
         out = Text()
+        header = "…"
         if d.get("error"):
             out.append(d["error"], style=RED)
-            self.query_one("#detail", Static).update(out)
-            return
-        info = d.get("info", {})
-        mark = "▶" if d.get("running") else (
-            "✓" if info.get("status") == "success" else "·"
-        )
-        out.append(
-            f"{mark} {info.get('taskId')} {info.get('title', '')}\n",
-            style=f"bold {AMBER}",
-        )
-        p = d.get("plane", {})
-        if p.get("linked"):
-            out.append(
-                f"  {p.get('project')} › {p.get('milestone')} › {p.get('issue')}\n\n",
-                style=MAGENTA,
-            )
         else:
-            out.append(f"  {p.get('reason', 'unplanned')}\n\n", style="dim")
-        events = d.get("events", [])
-        out.append(f"TRANSCRIPT · {len(events)} events\n", style=f"bold {AMBER}")
-        for e in events[-200:]:
-            stamp = time.strftime("%H:%M:%S", time.localtime(e.get("ts", 0)))
-            out.append(f"  {stamp} ", style="dim")
-            if e["type"] == "log":
-                style = RED if e.get("level") == "error" else "#cfe8f5"
-                out.append(f"{e.get('line', '')}\n", style=style)
-            elif e["type"] == "file_diff":
-                out.append(f"⇄ diff {e.get('path')}\n", style=CYAN)
-            elif e["type"] == "task_start":
-                out.append("▶ task started\n", style=GREEN)
-            elif e["type"] == "task_done":
-                out.append(f"■ done — {e.get('status')}\n", style=GREEN)
+            info = d.get("info", {})
+            header = f"{info.get('taskId', '?')} {info.get('title', '')}"[:60]
+            p = d.get("plane", {})
+            if p.get("linked"):
+                out.append(
+                    f"{p.get('project')} › {p.get('milestone')} › "
+                    f"{p.get('issue')}\n",
+                    style=MAGENTA,
+                )
+                out.append("ctrl+o opens in Plane\n\n", style="dim")
             else:
-                out.append(f"{e['type']}\n")
-        self.query_one("#detail", Static).update(out)
+                out.append(f"{p.get('reason', 'unplanned')}\n\n", style="dim")
+            for e in d.get("events", []):
+                stamp = time.strftime("%H:%M:%S", time.localtime(e.get("ts", 0)))
+                out.append(f"{stamp} ", style="dim")
+                if e["type"] == "log":
+                    style = RED if e.get("level") == "error" else "#cfe8f5"
+                    out.append(f"{e.get('line', '')}\n", style=style)
+                elif e["type"] == "file_diff":
+                    out.append(f"⇄ diff {e.get('path')}\n", style=CYAN)
+                    for dl in e.get("diff", "").splitlines():
+                        ds = (
+                            GREEN if dl.startswith("+")
+                            else RED if dl.startswith("-")
+                            else "dim"
+                        )
+                        out.append(f"  {dl}\n", style=ds)
+                elif e["type"] == "task_start":
+                    out.append("▶ task started\n", style=GREEN)
+                elif e["type"] == "task_done":
+                    out.append(f"■ done — {e.get('status')}\n", style=GREEN)
+                else:
+                    out.append(f"{e['type']}\n")
+        self.query_one("#drill-output").border_title = header
+        self.query_one("#output-body", Static).update(out)
 
 
 class VaultTop(App):
@@ -137,6 +233,7 @@ class VaultTop(App):
         # priority: selection must work even while the prompt Input has focus
         Binding("up", "move(-1)", "select ↑", priority=True),
         Binding("down", "move(1)", "select ↓", priority=True),
+        Binding("right", "drill_right", "drill →", priority=True),
         ("enter", "drill", "drill down"),
     ]
     CSS = f"""
@@ -376,6 +473,10 @@ class VaultTop(App):
         )
 
     def action_move(self, delta: int) -> None:
+        # priority bindings are app-global: delegate to the drill screen
+        if isinstance(self.screen, TaskScreen):
+            self.screen.action_nav(delta)
+            return
         n = len(self._tasks())
         if n:
             self.cursor = (self.cursor + delta) % n
@@ -383,7 +484,21 @@ class VaultTop(App):
     def action_drill(self) -> None:
         tasks = self._tasks()
         if tasks:
-            self.push_screen(TaskScreen(tasks[self.cursor % len(tasks)]["taskId"]))
+            self.push_screen(
+                TaskScreen([t["taskId"] for t in tasks], self.cursor % len(tasks))
+            )
+
+    def action_drill_right(self) -> None:
+        """→ drills — unless you're editing prompt text, where it stays a
+        cursor key (priority binding steals it, so re-dispatch manually)."""
+        if isinstance(self.screen, TaskScreen):
+            self.screen.action_go_right()
+            return
+        prompt = self.query_one("#prompt", Input)
+        if prompt.has_focus and prompt.value:
+            prompt.action_cursor_right()
+        else:
+            self.action_drill()
 
     def action_toggle_worker(self, idx: int) -> None:
         workers = self.state.get("workers", [])

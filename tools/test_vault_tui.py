@@ -66,17 +66,36 @@ async def main() -> int:
         assert app.cursor != before or len(app._tasks()) <= 1, "cursor stuck"
         print("✓ arrow selection works with prompt focused")
 
-        # empty-Enter drills into the selected task; Esc pops back
-        await pilot.press("enter")
+        # → drills into the Miller view; ↑/↓ move the task selection there
+        await pilot.press("right")
         await pilot.pause(0.8)
         from vault_top import TaskScreen
 
         assert isinstance(app.screen, TaskScreen), f"no drill: {app.screen}"
-        print("✓ empty-Enter drilled into", app.screen.task_id)
-        await pilot.press("escape")
+        drill = app.screen
+        print("✓ → drilled into", drill.task_id)
+        first = drill.task_id
+        if len(drill.task_ids) > 1:
+            await pilot.press("down")
+            await pilot.pause(0.5)
+            assert drill.task_id != first, "↑/↓ didn't move drill selection"
+            print("✓ ↑/↓ moves selection inside drill view")
+
+        # second → focuses the output pane; j/k scroll it
+        await pilot.press("right")
+        assert drill.depth == 2, "→ didn't focus output pane"
+        await pilot.press("j")
+        await pilot.press("j")
+        await pilot.press("k")
+        print("✓ →→ focused output; j/k scrolled without error")
+
+        # ← walks back: depth 2 → 1 → pop to deck
+        await pilot.press("left")
+        assert drill.depth == 1, "← didn't return focus to the list"
+        await pilot.press("left")
         await pilot.pause(0.3)
-        assert not isinstance(app.screen, TaskScreen), "esc didn't pop"
-        print("✓ esc popped back to deck")
+        assert not isinstance(app.screen, TaskScreen), "← didn't pop to deck"
+        print("✓ ← ← walked back out to the deck")
     return 0
 
 
