@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { VaultEvent, VaultGraph } from "@vault/shared/events";
 import { fetchGraph, fetchModules, subscribeEvents } from "./api";
 import DeckView from "./deck/DeckView";
+import FrameGovernor from "./graph/FrameGovernor";
 import VaultGraphScene, { FgNode } from "./graph/VaultGraph";
 import { ModuleManifestEntry, panelRegistry } from "./modules/loader";
 import NotePanel from "./panels/NotePanel";
@@ -22,15 +23,8 @@ export default function App() {
     Record<string, VaultEvent[]>
   >({});
   const [vitals, setVitals] = useState<Record<string, number>>({});
-  // stop rendering entirely while the window is hidden/minimized — the
-  // ambient HUD costs real GPU (bloom at 4K) and nobody is watching it
-  const [frameloop, setFrameloop] = useState<"always" | "never">("always");
-  useEffect(() => {
-    const onVis = () =>
-      setFrameloop(document.hidden ? "never" : "always");
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
+  // frameloop="demand" + FrameGovernor: 30fps ambient, 60fps while
+  // interacting, zero while hidden (governor stops its interval)
 
   const loadGraph = useCallback(() => {
     fetchGraph().then(setGraph).catch((e) => console.error("graph:", e));
@@ -117,8 +111,9 @@ export default function App() {
       <Canvas
         camera={{ position: [0, 40, 220], fov: 55 }}
         dpr={[1, 1.5]}
-        frameloop={frameloop}
+        frameloop="demand"
       >
+        <FrameGovernor fps={30} />
         <VaultGraphScene data={graph} onNodeClick={setSelected} />
         <FrameProbe onDone={handleProbe} />
       </Canvas>

@@ -88,6 +88,17 @@ function Nodes({
   );
 }
 
+/** Slow ambient spin on the graph group itself — unlike OrbitControls
+ * autoRotate, this emits no change events, so the demand-mode frame
+ * governor (30fps ambient) stays in control. */
+function SpinGroup({ children }: { children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null!);
+  useFrame((_, delta) => {
+    if (ref.current) ref.current.rotation.y += 0.07 * delta;
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 export default function VaultGraphScene({
   data,
   onNodeClick,
@@ -98,13 +109,12 @@ export default function VaultGraphScene({
   return (
     <>
       <color attach="background" args={[BG]} />
-      {data && <Nodes data={data} onNodeClick={onNodeClick} />}
-      <OrbitControls
-        autoRotate
-        autoRotateSpeed={0.35}
-        enableDamping
-        dampingFactor={0.08}
-      />
+      {data && (
+        <SpinGroup>
+          <Nodes data={data} onNodeClick={onNodeClick} />
+        </SpinGroup>
+      )}
+      <OrbitControls enableDamping={false} />
       <EffectComposer frameBufferType={HalfFloatType}>
         <Bloom
           mipmapBlur

@@ -21,9 +21,10 @@ export interface SpikeResult {
 
 const WARMUP = 120;
 const SAMPLES = 600;
-/** RADV on an R9700 should hold vsync (60+). Below 30fps at 5k nodes+bloom
- * on this hardware strongly suggests the software rasterizer. */
-const SOFTWARE_RENDER_FPS_THRESHOLD = 30;
+/** RADV on an R9700 holds vsync easily; the ambient FrameGovernor caps at
+ * 30fps, so the alarm threshold sits below that. True software rendering
+ * at 4K+bloom lands under 10fps — still caught with margin. */
+const SOFTWARE_RENDER_FPS_THRESHOLD = 20;
 
 export default function FrameProbe({
   onDone,
