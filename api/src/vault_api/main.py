@@ -160,14 +160,20 @@ class CompletionRequest(BaseModel):
     messages: list[dict]
     difficulty: str = "easy"
     max_tokens: int = 1024
+    lane: str | None = None  # pin a specific card (r9700 / 4060ti / 7900xtx)
 
 
 @app.post("/llm/complete", dependencies=[auth_required])
 async def llm_complete(req: CompletionRequest) -> dict:
-    """M5.2/M5.3 — route to a local lane by difficulty; paid fallback."""
+    """M5.2/M5.3 — route by difficulty, or pin a lane explicitly."""
     from .router import model_router
 
-    return await model_router.complete(req.messages, req.difficulty, req.max_tokens)
+    try:
+        return await model_router.complete(
+            req.messages, req.difficulty, req.max_tokens, lane_id=req.lane
+        )
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
 
 
 @app.get("/llm/ledger", dependencies=[auth_required])

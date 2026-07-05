@@ -87,10 +87,21 @@ class ModelRouter:
         messages: list[dict],
         difficulty: Difficulty = "easy",
         max_tokens: int = 1024,
+        lane_id: str | None = None,
     ) -> dict:
         """Local-first chat completion; escalates to paid API on failure.
-        Returns {content, lane, usage} — lane 'paid-api' marks an escalation."""
-        lane = await self.pick_lane(difficulty)
+        lane_id pins a specific card — if that lane is down, this errors
+        loudly instead of silently detouring. Returns {content, lane, usage}."""
+        if lane_id is not None:
+            lane = next((l for l in self.lanes if l.id == lane_id), None)
+            if lane is None:
+                raise ValueError(f"unknown lane: {lane_id}")
+            if not await self._check(lane):
+                raise RuntimeError(
+                    f"lane '{lane_id}' is down — start its worker or drop the pin"
+                )
+        else:
+            lane = await self.pick_lane(difficulty)
         if lane is not None:
             try:
                 async with httpx.AsyncClient(timeout=LOCAL_TIMEOUT_S) as c:

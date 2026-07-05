@@ -266,8 +266,8 @@ class VaultTop(App):
          "cloud orchestrator, slim profile (~3.6k tok overhead)"),
         ("/hermes!", "/hermes! <prompt>",
          "cloud orchestrator, FULL profile: memory+toolsets (~12.5k tok)"),
-        ("/ask", "/ask <prompt>",
-         "local model router (free tokens; paid fallback if worker down)"),
+        ("/ask", "/ask [gpu] <prompt>",
+         "local model router; optional card pin (r9700/4060ti)"),
         ("/models", "/models", "list local GGUFs (size, arch, loadability)"),
         ("/pull", "/pull <hf-repo> [quant]",
          "download a GGUF from Hugging Face into ~/llm-models"),
@@ -600,18 +600,32 @@ class VaultTop(App):
 
     @work(thread=True, group="dispatch")
     def ask_router(self, prompt: str) -> None:
-        """/ask — one-shot to the model router (local lane, paid fallback)."""
+        """/ask [gpu] <prompt> — one-shot to the router; first word may pin
+        a card (r9700 / 4060ti / 7900xtx)."""
+        lane = None
+        parts = prompt.split(None, 1)
+        known = {w["gpu"] for w in self.state.get("workers", [])}
+        if len(parts) == 2 and parts[0] in known:
+            lane, prompt = parts[0], parts[1]
         self.call_from_thread(
-            self._log_line, Text(f"? {prompt}", style=AMBER)
+            self._log_line,
+            Text(f"? {prompt}" + (f"  [→{lane}]" if lane else ""), style=AMBER),
         )
         try:
             r = requests.post(
                 f"{self.api}/llm/complete",
                 headers=self.headers,
                 json={"messages": [{"role": "user", "content": prompt}],
-                      "difficulty": "easy", "max_tokens": 1024},
+                      "difficulty": "easy", "max_tokens": 1024, "lane": lane},
                 timeout=180,
             )
+            if r.status_code == 400:
+                # e.g. "lane 'r9700' is down — start its worker or drop the pin"
+                self.call_from_thread(
+                    self._log_line,
+                    Text(r.json().get("detail", "bad request"), style=RED),
+                )
+                return
             r.raise_for_status()
             d = r.json()
             reply = Text()
