@@ -1,0 +1,14 @@
+# VAULT worker #2 (interim) — llama.cpp Vulkan on the NVIDIA 4060 Ti (:8082)
+# Junior lane until the 7900 XTX arrives. Start on demand (F2 in the deck).
+[Unit]
+Description=VAULT worker #2 - llama.cpp Vulkan on NVIDIA 4060 Ti (:8082)
+After=network.target
+
+[Service]
+Type=exec
+ExecStart=/bin/bash /home/brice/Claude_Code_Projects/projects/vault-os/tools/run_worker_4060ti.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

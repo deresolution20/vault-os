@@ -229,6 +229,7 @@ class VaultTop(App):
         ("escape", "cancel_task", "cancel task"),
         ("f1", "toggle_worker(0)", "worker 1"),
         ("f2", "toggle_worker(1)", "worker 2"),
+        ("f3", "toggle_worker(2)", "worker 3"),
         ("ctrl+o", "open_issue", "open in Plane"),
         # priority: selection must work even while the prompt Input has focus
         Binding("up", "move(-1)", "select ↑", priority=True),
@@ -926,8 +927,10 @@ class VaultTop(App):
             style="dim",
         )
         workers = {w["gpu"]: w for w in s.get("workers", [])}
+        # F-key number = position in the workers list (stable), not GPU order
+        fkey = {w["gpu"]: i + 1 for i, w in enumerate(s.get("workers", []))}
         throughput = s.get("throughput", {})
-        for i, g in enumerate(s.get("gpus", [])):
+        for g in s.get("gpus", []):
             used, total = g["vramUsedGB"], g["vramTotalGB"]
             bar = "█" * int(20 * used / max(total, 1)) + "░" * (
                 20 - int(20 * used / max(total, 1))
@@ -944,7 +947,7 @@ class VaultTop(App):
             w = workers.get(g["id"])
             if w:
                 if w.get("up"):
-                    out.append(f"  ├─ [F{i + 1}] vault-worker ", style=GREEN)
+                    out.append(f"  ├─ [F{fkey[g['id']]}] vault-worker ", style=GREEN)
                     out.append("● ", style=GREEN)
                     out.append(
                         f"{w.get('model')}", style=f"bold {MAGENTA}"
@@ -953,7 +956,7 @@ class VaultTop(App):
                         f" · {w.get('activeSlots', 0)} slot(s)\n", style=GREEN
                     )
                 else:
-                    out.append(f"  ├─ [F{i + 1}] vault-worker ○ down", style="dim")
+                    out.append(f"  ├─ [F{fkey[g['id']]}] vault-worker ○ down", style="dim")
                     out.append("  ⭘ next: ", style="dim")
                     out.append(
                         f"{w.get('selectedModel', '?')}\n",

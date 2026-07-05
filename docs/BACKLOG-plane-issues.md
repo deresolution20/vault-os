@@ -37,7 +37,7 @@ own inference, not a build workforce).
 | M4.4 | Bearer auth + localhost-only bind | easy | **done 2026-07-03** — bearer auth REST+WS, loopback bind, /health open | M4.1 | |
 | M5.1 | ROCm 7.2.x + llama-server Vulkan on R9700 (worker 1) | hard | **done 2026-07-04** — llama.cpp b9870 Vulkan, qwen3-32B q4, 25 tok/s, idles correctly (no HIP pin); worker start-on-demand | — | coordinate `projects/r9700-kernel` |
 | M5.1b | Second Vulkan worker on 7900 XTX | hard | **waits for card (~Jul 7)** | M5.1 | |
-| M5.2 | Model router: route by difficulty tag + health checks | medium | **done (single-lane live) 2026-07-04** — hard→r9700 verified via /llm/complete; dual-lane balancing waits for 7900 XTX | M5.1 | full balancing needs both cards |
+| M5.2 | Model router: route by difficulty tag + health checks | medium | **done 2026-07-04 — DUAL-LANE LIVE**: easy→4060ti (interim junior), hard→r9700, verified; 7900 XTX becomes F3/junior when it lands | M5.1 | full balancing needs both cards |
 | M5.3 | Local-first paid-API fallback + savings metric | medium | **done 2026-07-04 — LIVE-PROVEN**: worker down → paid-api lane, ledger 22 paid tokens, reason logged | M5.2 | ⚠ burns paid credits — confirm with Brice before load-testing |
 | M5.4 | (opt) vLLM-ROCm TP=1 recipe doc, R9700 only | easy | todo | M5.1 | never TP≥2 |
 | M6.1 | Sub-agents emit task/diff/log events → Live Build panel | medium | **done 2026-07-04** — POST /events + emit_build_events.py + Live Build panel; demo verified | M4.3 | |

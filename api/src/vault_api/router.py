@@ -55,6 +55,7 @@ class ModelRouter:
     def __init__(self) -> None:
         self.lanes = [
             Lane("r9700", settings.worker_r9700_url, tier="senior"),
+            Lane("4060ti", settings.worker_4060ti_url, tier="junior"),
             Lane("7900xtx", settings.worker_7900xtx_url, tier="junior"),
         ]
         self.ledger = TokenLedger()

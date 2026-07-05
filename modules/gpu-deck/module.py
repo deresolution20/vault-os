@@ -346,6 +346,8 @@ def _nvidia_gpus() -> list[dict]:
 WORKERS = [
     {"id": "r9700-worker", "gpu": "r9700", "url": settings.worker_r9700_url,
      "unit": "vault-worker-r9700", "defaultModel": "qwen3-32b"},
+    {"id": "4060ti-worker", "gpu": "4060ti", "url": settings.worker_4060ti_url,
+     "unit": "vault-worker-4060ti", "defaultModel": "qwen3:14b"},
     {"id": "7900xtx-worker", "gpu": "7900xtx", "url": settings.worker_7900xtx_url,
      "unit": "vault-worker-7900xtx", "defaultModel": "(pick with /model)"},
 ]
