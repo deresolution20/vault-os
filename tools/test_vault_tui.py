@@ -96,6 +96,26 @@ async def main() -> int:
         await pilot.pause(0.3)
         assert not isinstance(app.screen, TaskScreen), "← didn't pop to deck"
         print("✓ ← ← walked back out to the deck")
+
+        # slash palette: '/' opens the menu, ↓ navigates, tab completes
+        prompt.focus()
+        await pilot.press("slash")
+        await pilot.pause(0.2)
+        assert app.menu_open, "palette didn't open on /"
+        n_all = len(app.menu_items)
+        await pilot.press("down")
+        assert app.menu_idx == 1, "↓ didn't move palette selection"
+        await pilot.press("tab")
+        await pilot.pause(0.2)
+        assert prompt.value.startswith(app.COMMANDS[1][0]), (
+            f"tab didn't complete: {prompt.value!r}"
+        )
+        print(f"✓ / palette: {n_all} commands, ↓ + tab completed "
+              f"{prompt.value.strip()!r}")
+        await pilot.press("escape")
+        await pilot.pause(0.2)
+        assert not app.menu_open and prompt.value == "", "esc didn't clear"
+        print("✓ esc closed the palette")
     return 0
 
 

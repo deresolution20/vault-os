@@ -234,12 +234,18 @@ class VaultTop(App):
         Binding("up", "move(-1)", "select ↑", priority=True),
         Binding("down", "move(1)", "select ↓", priority=True),
         Binding("right", "drill_right", "drill →", priority=True),
+        Binding("tab", "menu_tab", "complete", priority=True, show=False),
         ("enter", "drill", "drill down"),
     ]
     CSS = f"""
     Screen {{ background: #04060c; }}
     #deck {{ padding: 1 2; height: 1fr; }}
     #orchline {{ height: 1; padding: 0 2; background: #060a12; }}
+    #cmdmenu {{
+        height: auto; max-height: 14; padding: 0 2;
+        background: #0a0f1a; border-top: solid {CYAN} 40%;
+        display: none;
+    }}
     #transcript {{
         height: 12; border-top: solid {CYAN} 30%;
         background: #04060c; color: #cfe8f5; padding: 0 2; display: none;
@@ -251,6 +257,28 @@ class VaultTop(App):
     """
 
     TAG_COLORS = [CYAN, MAGENTA, GREEN, "#7ddcff", "#c792ea", AMBER]
+
+    # (command, usage, description) — drives the / palette and /help
+    COMMANDS = [
+        ("/run", "/run <cmd>", "run a shell command server-side, streamed live"),
+        ("/hermes", "/hermes <prompt>",
+         "cloud orchestrator, slim profile (~3.6k tok overhead)"),
+        ("/hermes!", "/hermes! <prompt>",
+         "cloud orchestrator, FULL profile: memory+toolsets (~12.5k tok)"),
+        ("/ask", "/ask <prompt>",
+         "local model router (free tokens; paid fallback if worker down)"),
+        ("/models", "/models", "list local GGUFs (size, arch, loadability)"),
+        ("/model", "/model [gpu] <n|name>",
+         "switch a card's worker model (sticky across restarts)"),
+        ("/cancel", "/cancel", "cancel the active task (same as Esc)"),
+        ("/clear", "/clear", "clear and hide the transcript pane"),
+        ("/reset-cloud", "/reset-cloud",
+         "zero the cloud-orchestrator token window (records archived)"),
+        ("/reset-ledger", "/reset-ledger",
+         "zero the local/paid router token counters"),
+        ("/help", "/help", "show this command reference"),
+        ("/quit", "/quit", "exit vault (also ctrl+q)"),
+    ]
 
     def __init__(self) -> None:
         super().__init__()
@@ -265,6 +293,9 @@ class VaultTop(App):
         self.cloud_live: list | None = []  # None = poll error
         # plain-text mirror of the transcript (drives tests + future export)
         self.transcript_lines: list[str] = []
+        # slash-command palette state
+        self.menu_items: list[tuple[str, str, str]] = []
+        self.menu_idx = 0
 
     # ── layout ──────────────────────────────────────────────────────────
 
@@ -274,9 +305,10 @@ class VaultTop(App):
             Static(id="orchline"),
             RichLog(id="transcript", markup=False, wrap=True, max_lines=500),
         )
+        yield Static(id="cmdmenu")
         yield Input(
-            placeholder="›  text=local ask · /hermes slim · /hermes! full · "
-            "/run <cmd> · /cancel",
+            placeholder="›  type / for commands · bare text = ask the local "
+            "model · /help",
             id="prompt",
         )
         yield Footer()
@@ -401,14 +433,94 @@ class VaultTop(App):
             line = body
         self._log_line(line)
 
+    # ── slash-command palette ───────────────────────────────────────────
+
+    @property
+    def menu_open(self) -> bool:
+        return bool(self.menu_items)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "prompt":
+            return
+        value = event.value
+        if value.startswith("/") and " " not in value:
+            token = value.split()[0] if value.strip() else "/"
+            self.menu_items = [
+                c for c in self.COMMANDS if c[0].startswith(token)
+            ]
+            self.menu_idx = min(self.menu_idx, max(len(self.menu_items) - 1, 0))
+        else:
+            self.menu_items = []
+            self.menu_idx = 0
+        self._render_menu()
+
+    def _render_menu(self) -> None:
+        menu = self.query_one("#cmdmenu", Static)
+        if not self.menu_open:
+            menu.styles.display = "none"
+            return
+        out = Text()
+        for i, (cmd, usage, desc) in enumerate(self.menu_items):
+            sel = i == self.menu_idx
+            out.append("❯ " if sel else "  ", style=f"bold {CYAN}")
+            out.append(f"{usage:<24}", style=f"bold {CYAN}" if sel else CYAN)
+            out.append(f" {desc}\n", style="#cfe8f5" if sel else "dim")
+        out.append("  ↑↓ choose · tab/enter complete · esc close", style="dim")
+        menu.update(out)
+        menu.styles.display = "block"
+
+    def _menu_complete(self) -> None:
+        cmd, usage, _ = self.menu_items[self.menu_idx]
+        prompt = self.query_one("#prompt", Input)
+        needs_args = "<" in usage
+        prompt.value = cmd + (" " if needs_args else "")
+        prompt.cursor_position = len(prompt.value)
+        if not needs_args:
+            self.menu_items = []
+            self._render_menu()
+
+    def action_menu_tab(self) -> None:
+        if self.menu_open:
+            self._menu_complete()
+        elif not isinstance(self.screen, TaskScreen):
+            self.screen.focus_next()
+
+    def show_help(self) -> None:
+        self._log_line(Text("COMMANDS:", style=f"bold {AMBER}"))
+        for _, usage, desc in self.COMMANDS:
+            line = Text("  ")
+            line.append(f"{usage:<24}", style=CYAN)
+            line.append(f" {desc}")
+            self._log_line(line)
+        self._log_line(
+            Text("  bare text (no /)        quick question → local model "
+                 "router", style="dim")
+        )
+        self._log_line(
+            Text("  keys: ↑↓ select · → drill · j/k scroll · F1/F2 workers · "
+                 "esc cancel/close · ^o plane · ^q quit", style="dim")
+        )
+
     # ── command deck ────────────────────────────────────────────────────
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         line = event.value.strip()
+        # Enter with the palette open completes instead of submitting,
+        # unless the token already IS the highlighted no-arg command
+        if self.menu_open:
+            cmd, usage, _ = self.menu_items[self.menu_idx]
+            if line != cmd or "<" in usage:
+                self._menu_complete()
+                return
+            self.menu_items = []
+            self._render_menu()
         event.input.value = ""
         if not line:
             # k9s-style: Enter on an empty prompt drills into the selection
             self.action_drill()
+            return
+        if line == "/help":
+            self.show_help()
             return
         hermes_bin = str(Path.home() / ".hermes/hermes-agent/venv/bin/hermes")
         if line in ("/quit", "/q"):
@@ -653,8 +765,14 @@ class VaultTop(App):
         self.refresh_state()
 
     def action_cancel_task(self) -> None:
-        """Esc, layered: cancel a running task → else dismiss the transcript
-        pane → else just refocus the prompt (never a dead key)."""
+        """Esc, layered: close the palette → cancel a running task → dismiss
+        the transcript pane → refocus the prompt (never a dead key)."""
+        prompt = self.query_one("#prompt", Input)
+        if self.menu_open or prompt.value:
+            self.menu_items = []
+            self._render_menu()
+            prompt.value = ""
+            return
         if self.active_task:
             tid = self.active_task
             self._log_line(Text(f"✋ cancelling {tid}…", style=AMBER))
@@ -696,6 +814,11 @@ class VaultTop(App):
         )
 
     def action_move(self, delta: int) -> None:
+        # palette open → arrows navigate the menu
+        if self.menu_open:
+            self.menu_idx = (self.menu_idx + delta) % len(self.menu_items)
+            self._render_menu()
+            return
         # priority bindings are app-global: delegate to the drill screen
         if isinstance(self.screen, TaskScreen):
             self.screen.action_nav(delta)
