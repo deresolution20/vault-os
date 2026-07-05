@@ -356,6 +356,7 @@ class VaultTop(App):
         ("f1", "toggle_worker(0)", "worker 1"),
         ("f2", "toggle_worker(1)", "worker 2"),
         ("f3", "toggle_worker(2)", "worker 3"),
+        ("ctrl+d", "delete_session", "delete session"),
         ("ctrl+o", "open_issue", "open in Plane"),
         # priority: selection must work even while the prompt Input has focus
         Binding("up", "move(-1)", "select ↑", priority=True),
@@ -395,6 +396,7 @@ class VaultTop(App):
         ("/ask", "/ask [gpu] <prompt>",
          "start a chat session on the local router (optional card pin)"),
         ("/chats", "/chats", "reopen your ask sessions screen"),
+        ("/clear-chats", "/clear-chats", "delete ALL ask sessions"),
         ("/models", "/models", "list local GGUFs (size, arch, loadability)"),
         ("/pull", "/pull <hf-repo> [quant]",
          "download a GGUF from Hugging Face into ~/llm-models"),
@@ -690,6 +692,13 @@ class VaultTop(App):
             self.ask_router(line[5:])
         elif line == "/chats":
             self.open_chats()
+        elif line == "/clear-chats":
+            n = len(self.chat_sessions)
+            self.chat_sessions.clear()
+            self.chat_idx = 0
+            self.cursor = 0
+            self._save_chats()
+            self._log_line(Text(f"deleted {n} ask session(s)", style=AMBER))
         elif line == "/reset-cloud":
             self.reset_cloud()
         elif line == "/models":
@@ -771,6 +780,33 @@ class VaultTop(App):
         if not isinstance(self.screen, ChatScreen):
             self.push_screen(ChatScreen())
         self.chat_send(prompt)
+
+    def action_delete_session(self) -> None:
+        """ctrl+d — delete the selected (deck) or current (chat screen)
+        session. Instant; sessions are cheap to recreate."""
+        if isinstance(self.screen, ChatScreen):
+            idx = self.chat_idx
+        else:
+            sel = self._selectables()
+            if not sel:
+                return
+            kind, idx = sel[self.cursor % len(sel)]
+            if kind != "chat":
+                return
+        if not (0 <= idx < len(self.chat_sessions)):
+            return
+        gone = self.chat_sessions.pop(idx)
+        self.chat_idx = min(self.chat_idx, max(len(self.chat_sessions) - 1, 0))
+        self.cursor = min(self.cursor, max(len(self._selectables()) - 1, 0))
+        self._save_chats()
+        if isinstance(self.screen, ChatScreen):
+            if self.chat_sessions:
+                self.screen.redraw()
+            else:
+                self.pop_screen()
+        self._log_line(
+            Text(f"deleted session: {gone['title'][:40]}", style=AMBER)
+        )
 
     def open_chats(self) -> None:
         """/chats — reopen the session screen on the latest session."""

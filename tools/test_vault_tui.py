@@ -167,6 +167,14 @@ async def main() -> int:
         assert len(app.chat_sessions[app.chat_idx]["messages"]) == 4
         print("✓ deck lists the session; Enter jumps back into it with history")
         await pilot.press("escape")
+
+        # ctrl+d prunes the selected session from the deck
+        n = len(app.chat_sessions)
+        app.cursor = 0
+        await pilot.press("ctrl+d")
+        await pilot.pause(0.3)
+        assert len(app.chat_sessions) == n - 1, "ctrl+d didn't delete"
+        print("✓ ctrl+d deleted the session from the deck")
     return 0
 
 
