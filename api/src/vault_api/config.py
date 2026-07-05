@@ -13,7 +13,7 @@ class Settings(BaseSettings):
         env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    vault_path: Path = Path.home() / "Obsidian_Vaults/Sabrina"
+    vault_path: Path = Path.home() / "vault"  # set VAULT_PATH in .env
     hermes_api_host: str = "127.0.0.1"
     hermes_api_port: int = 8100
     hermes_api_token: str = ""
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
 
     plane_api_url: str = ""
-    # browser-facing origin for issue links — the one Brice is signed into
+    # browser-facing origin for issue links — the one the operator is signed into
     # (session cookies don't cross localhost vs LAN-IP origins)
     plane_web_url: str = ""
     plane_api_token: str = ""

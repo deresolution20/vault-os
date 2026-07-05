@@ -6,7 +6,7 @@ git diff of the working tree on exit (PRD §11.4), and emits task_done.
 POST /cancel/{taskId} kills the whole process group → status "cancelled".
 
 This is the operator's own command channel on a loopback-only, bearer-authed
-API — it executes what Brice (or his TUI) tells it to, like a terminal does.
+API — it executes what the operator (or his TUI) tells it to, like a terminal does.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # PRD — VAULT: Voice-Activated Unified Logic Terminal (AI-OS, Step One)
 
-**Owner:** Brice · **Author:** Claude + Brice · **Date:** 2026-07-03
+**Owner:** the operator · **Author:** Claude + the operator · **Date:** 2026-07-03
 **Build agent:** Fable 5 (via Hermes + Plane build-platform)
 **Source of truth for tech choices:** `docs/RESEARCH-2026-07-03-vault-os-architecture.md` (deep-research report + verified ROCm/Tauri addendum). Every claim in this PRD traces back to that doc.
 
@@ -81,7 +81,7 @@ A **desktop AI-OS** — a dark, cinematic HUD with a central **glowing, color-sh
 
 ## 5. Personas / actors
 
-- **Brice (operator):** watches the HUD, clicks nodes, issues voice/command-deck intents.
+- **the operator (operator):** watches the HUD, clicks nodes, issues voice/command-deck intents.
 - **Hermes (autonomous agent):** reads graph + RAG, writes notes, dispatches coding sub-tasks, emits live events. Primary API consumer.
 - **Build sub-agents (local models):** the two GPU workers executing atomized coding tasks; emit status/diff/log events.
 

@@ -58,7 +58,7 @@ async def _state_id(group: str) -> str | None:
     return _states.get(group)
 
 
-# Mirror PLANNED work only (Brice 2026-07-04): ad-hoc /run commands and
+# Mirror PLANNED work only (the operator 2026-07-04): ad-hoc /run commands and
 # hermes chat (taskId run-xxxx) must NOT become Plane work items.
 PLANNED_ID = re.compile(r"^[MX]\d")
 

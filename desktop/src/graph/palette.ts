@@ -1,5 +1,5 @@
 /**
- * Blade Runner palette (Brice's directive 2026-07-03): neon cyan/teal and
+ * Blade Runner palette (the operator's directive 2026-07-03): neon cyan/teal and
  * magenta/pink glow on a near-black blue base, holographic amber for HUD
  * accents. Color drift stays INSIDE this palette — no full-rainbow cycling.
  */
