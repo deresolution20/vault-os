@@ -39,6 +39,20 @@ CYAN = "#00e5ff"
 MAGENTA = "#ff2bd6"
 GREEN = "#7ddc8a"
 RED = "#ff5f56"
+VIOLET = "#c792ea"
+
+# stable color identity per lane/source — used everywhere a lane appears
+LANE_COLORS = {
+    "r9700": CYAN,
+    "4060ti": GREEN,
+    "7900xtx": VIOLET,
+    "paid-api": RED,
+    "cloud": MAGENTA,
+}
+
+
+def lane_color(lane: str | None) -> str:
+    return LANE_COLORS.get(lane or "", "#cfe8f5")
 
 
 def _env() -> dict:
@@ -313,14 +327,14 @@ class ChatScreen(Screen):
         for i, s in enumerate(sessions):
             sel = "❯ " if i == idx else "  "
             style = f"bold {CYAN}" if i == idx else "#cfe8f5"
-            lane = f" →{s['lane']}" if s.get("lane") else ""
             spin = (
                 f" {SPIN[app.tick % len(SPIN)]}" if s.get("waiting") else ""
             )
             lst.append(f"{sel}{s['title'][:24]}{spin}\n", style=style)
-            lst.append(
-                f"   {len(s['messages']) // 2} turns{lane}\n", style="dim"
-            )
+            lst.append(f"   {len(s['messages']) // 2} turns", style="dim")
+            if s.get("lane"):
+                lst.append(f" →{s['lane']}", style=lane_color(s["lane"]))
+            lst.append("\n")
         self.query_one("#chat-list-body", Static).update(lst)
         # right: conversation
         body = Text()
@@ -334,9 +348,8 @@ class ChatScreen(Screen):
                     body.append("❯ you\n", style=f"bold {AMBER}")
                     body.append(f"{m['content']}\n\n")
                 else:
-                    body.append(
-                        f"■ {m.get('lane', 'local')}\n", style=f"bold {CYAN}"
-                    )
+                    ml = m.get("lane", "local")
+                    body.append(f"■ {ml}\n", style=f"bold {lane_color(ml)}")
                     body.append(f"{m['content']}\n\n", style="#cfe8f5")
         if self.waiting:
             body.append(
@@ -1171,7 +1184,7 @@ class VaultTop(App):
                 " · ".join(
                     f"{e.get('model')} {e.get('elapsedS', 0):.0f}s" for e in live
                 ),
-                style=CYAN,
+                style=MAGENTA,
             )
         else:
             line.append("ORCHESTRATOR ", style=f"bold {AMBER}")
@@ -1192,50 +1205,52 @@ class VaultTop(App):
             self.query_one("#deck", Static).update(out)
             return
         led = s.get("ledger", {})
+        out.append(f"  local {led.get('localTokens', 0)} tok", style="dim")
+        paid = led.get("paidTokens", 0)
         out.append(
-            f"  local {led.get('localTokens', 0)} tok · paid "
-            f"{led.get('paidTokens', 0)} tok\n\n",
-            style="dim",
+            f" · paid {paid} tok\n\n",
+            style=LANE_COLORS["paid-api"] if paid else "dim",
         )
         workers = {w["gpu"]: w for w in s.get("workers", [])}
         # F-key number = position in the workers list (stable), not GPU order
         fkey = {w["gpu"]: i + 1 for i, w in enumerate(s.get("workers", []))}
         throughput = s.get("throughput", {})
         for g in s.get("gpus", []):
+            gc = lane_color(g["id"])
             used, total = g["vramUsedGB"], g["vramTotalGB"]
             bar = "█" * int(20 * used / max(total, 1)) + "░" * (
                 20 - int(20 * used / max(total, 1))
             )
-            out.append(f"◉ {g['name']} ", style=f"bold {CYAN}")
-            out.append(f"{bar} {used}/{total} GB\n", style="#7ddcff")
+            out.append(f"◉ {g['name']} ", style=f"bold {gc}")
+            out.append(f"{bar} {used}/{total} GB\n", style=gc)
             tp = throughput.get(g["id"])
             if tp:
                 out.append(
                     f"  ⚡ {tp['liveTps']} tok/s · 1h Ø {tp['hourAvgTps']} "
                     f"tok/s · {tp['hourTokens']:,} tok\n",
-                    style=GREEN,
+                    style=gc,
                 )
             w = workers.get(g["id"])
             if w:
                 if w.get("up"):
-                    out.append(f"  ├─ [F{fkey[g['id']]}] vault-worker ", style=GREEN)
-                    out.append("● ", style=GREEN)
+                    out.append(f"  ├─ [F{fkey[g['id']]}] vault-worker ", style=gc)
+                    out.append("● ", style=gc)
                     out.append(
-                        f"{w.get('model')}", style=f"bold {MAGENTA}"
+                        f"{w.get('model')}", style=f"bold {gc}"
                     )
                     out.append(
-                        f" · {w.get('activeSlots', 0)} slot(s)\n", style=GREEN
+                        f" · {w.get('activeSlots', 0)} slot(s)\n", style=gc
                     )
                 else:
                     out.append(f"  ├─ [F{fkey[g['id']]}] vault-worker ○ down", style="dim")
                     out.append("  ⭘ next: ", style="dim")
                     out.append(
                         f"{w.get('selectedModel', '?')}\n",
-                        style=MAGENTA,
+                        style=gc,
                     )
             else:
                 out.append(
-                    "  └─ no vault worker (display / ollama card)\n",
+                    "  └─ no vault worker (display card)\n",
                     style="dim",
                 )
         out.append("\nCLOUD ORCHESTRATOR · ollama.com\n", style=f"bold {AMBER}")
@@ -1245,7 +1260,7 @@ class VaultTop(App):
         for c in cloud:
             spin = SPIN[self.tick % len(SPIN)] if c.get("inFlight") else "├─"
             approx = "≈" if c.get("approx") else ""
-            out.append(f"  {spin} {c['model']} ", style="bold")
+            out.append(f"  {spin} {c['model']} ", style=f"bold {MAGENTA}")
             out.append(
                 f"{c['requests']} req · in {c['tokensIn']:,} / out "
                 f"{c['tokensOut']:,}{approx} tok · {c['avgTps']} tok/s · "
@@ -1260,11 +1275,11 @@ class VaultTop(App):
             spin = (
                 f" {SPIN[self.tick % len(SPIN)]}" if cs.get("waiting") else ""
             )
-            lane = f" →{cs['lane']}" if cs.get("lane") else ""
             out.append(f" {sel}💬 {cs['title'][:44]}{spin}", style="#cfe8f5")
-            out.append(
-                f"  {len(cs['messages']) // 2} turns{lane}\n", style="dim"
-            )
+            out.append(f"  {len(cs['messages']) // 2} turns", style="dim")
+            if cs.get("lane"):
+                out.append(f" →{cs['lane']}", style=lane_color(cs["lane"]))
+            out.append("\n")
 
         offset = len(self.chat_sessions)
         out.append("\nRUNNING\n", style=f"bold {AMBER}")
