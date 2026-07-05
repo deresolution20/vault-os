@@ -116,6 +116,42 @@ async def main() -> int:
         await pilot.pause(0.2)
         assert not app.menu_open and prompt.value == "", "esc didn't clear"
         print("✓ esc closed the palette")
+
+        # /ask opens a chat session screen with memory
+        from vault_top import ChatScreen
+
+        n_before = len(app.chat_sessions)
+        prompt.value = "/ask remember the number 42, reply OK"
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+        assert isinstance(app.screen, ChatScreen), "no chat screen"
+        assert len(app.chat_sessions) == n_before + 1, "no new session"
+        for _ in range(120):
+            await pilot.pause(0.5)
+            if len(app.chat_sessions[app.chat_idx]["messages"]) >= 2:
+                break
+        msgs = app.chat_sessions[app.chat_idx]["messages"]
+        assert msgs[1]["role"] == "assistant" and msgs[1]["content"], (
+            f"no reply: {msgs}"
+        )
+        print(f"✓ chat session started, reply from [{msgs[1].get('lane')}]")
+
+        # second turn carries history (memory)
+        chat_prompt = app.screen.query_one("#chat-prompt")
+        chat_prompt.value = "what number did I ask you to remember?"
+        await pilot.press("enter")
+        for _ in range(120):
+            await pilot.pause(0.5)
+            if len(app.chat_sessions[app.chat_idx]["messages"]) >= 4:
+                break
+        msgs = app.chat_sessions[app.chat_idx]["messages"]
+        assert len(msgs) == 4, f"history didn't grow: {len(msgs)}"
+        remembered = "42" in msgs[3]["content"]
+        print(f"✓ multi-turn session (4 msgs) · model recalled 42: {remembered}")
+        await pilot.press("escape")
+        await pilot.pause(0.3)
+        assert not isinstance(app.screen, ChatScreen), "esc didn't leave chat"
+        print("✓ esc returned to deck; session persisted")
     return 0
 
 

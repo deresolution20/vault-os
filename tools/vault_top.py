@@ -222,6 +222,121 @@ class TaskScreen(Screen):
         self.query_one("#output-body", Static).update(out)
 
 
+class ChatScreen(Screen):
+    """/ask sessions — workflows-style: session list left, conversation
+    right, prompt below. ↑/↓ switch sessions, PgUp/PgDn scroll, Esc back.
+    Each turn sends the full history to /llm/complete (real memory)."""
+
+    BINDINGS = [
+        ("escape", "back", "back to deck"),
+        ("pageup", "scroll_chat(-10)", "scroll ↑"),
+        ("pagedown", "scroll_chat(10)", "scroll ↓"),
+    ]
+    CSS = f"""
+    #chat-list {{
+        width: 32; border: round {CYAN} 60%; padding: 0 1;
+        border-title-color: {AMBER};
+    }}
+    #chat-body-wrap {{
+        border: round {CYAN} 30%; padding: 0 1;
+        border-title-color: {AMBER};
+    }}
+    #chat-prompt {{
+        dock: bottom; border: solid {CYAN} 40%;
+        background: #060a12; color: {AMBER};
+    }}
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.waiting = False
+
+    @property
+    def _app(self) -> "VaultTop":
+        return self.app  # type: ignore[return-value]
+
+    def compose(self) -> ComposeResult:
+        yield Horizontal(
+            VerticalScroll(Static(id="chat-list-body"), id="chat-list"),
+            VerticalScroll(Static(id="chat-body"), id="chat-body-wrap"),
+        )
+        yield Input(placeholder="›  reply · esc back to deck", id="chat-prompt")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#chat-list").border_title = "ASK SESSIONS"
+        self.query_one("#chat-prompt", Input).focus()
+        # animate the thinking spinner while a reply is pending
+        self.set_interval(0.12, lambda: self.waiting and self.redraw())
+        self.redraw()
+
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+    def action_scroll_chat(self, lines: int) -> None:
+        self.query_one("#chat-body-wrap", VerticalScroll).scroll_relative(
+            y=lines, animate=False
+        )
+
+    def switch_session(self, delta: int) -> None:
+        app = self._app
+        if app.chat_sessions:
+            app.chat_idx = (app.chat_idx + delta) % len(app.chat_sessions)
+            self.redraw()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        event.stop()  # don't bubble to the app's main-prompt handler
+        text = event.value.strip()
+        event.input.value = ""
+        if not text or self.waiting:
+            return
+        self._app.chat_send(text)
+
+    def redraw(self) -> None:
+        try:
+            self.query_one("#chat-list-body", Static)
+        except Exception:
+            return  # not mounted yet; on_mount paints the first frame
+        app = self._app
+        sessions = app.chat_sessions
+        idx = app.chat_idx
+        # left: session list
+        lst = Text()
+        for i, s in enumerate(sessions):
+            sel = "❯ " if i == idx else "  "
+            style = f"bold {CYAN}" if i == idx else "#cfe8f5"
+            lane = f" →{s['lane']}" if s.get("lane") else ""
+            lst.append(f"{sel}{s['title'][:24]}\n", style=style)
+            lst.append(
+                f"   {len(s['messages']) // 2} turns{lane}\n", style="dim"
+            )
+        self.query_one("#chat-list-body", Static).update(lst)
+        # right: conversation
+        body = Text()
+        if sessions:
+            s = sessions[idx]
+            self.query_one("#chat-body-wrap").border_title = (
+                f"{s['title'][:40]}" + (f" · {s['lane']}" if s.get("lane") else "")
+            )
+            for m in s["messages"]:
+                if m["role"] == "user":
+                    body.append("❯ you\n", style=f"bold {AMBER}")
+                    body.append(f"{m['content']}\n\n")
+                else:
+                    body.append(
+                        f"■ {m.get('lane', 'local')}\n", style=f"bold {CYAN}"
+                    )
+                    body.append(f"{m['content']}\n\n", style="#cfe8f5")
+        if self.waiting:
+            body.append(
+                f"{SPIN[app.tick % len(SPIN)]} thinking…", style=MAGENTA
+            )
+        self.query_one("#chat-body", Static).update(body)
+        self.query_one("#chat-body-wrap", VerticalScroll).scroll_end(
+            animate=False
+        )
+
+
 class VaultTop(App):
     TITLE = "VAULT"
     BINDINGS = [
@@ -267,7 +382,8 @@ class VaultTop(App):
         ("/hermes!", "/hermes! <prompt>",
          "cloud orchestrator, FULL profile: memory+toolsets (~12.5k tok)"),
         ("/ask", "/ask [gpu] <prompt>",
-         "local model router; optional card pin (r9700/4060ti)"),
+         "start a chat session on the local router (optional card pin)"),
+        ("/chats", "/chats", "reopen your ask sessions screen"),
         ("/models", "/models", "list local GGUFs (size, arch, loadability)"),
         ("/pull", "/pull <hf-repo> [quant]",
          "download a GGUF from Hugging Face into ~/llm-models"),
@@ -299,6 +415,9 @@ class VaultTop(App):
         # slash-command palette state
         self.menu_items: list[tuple[str, str, str]] = []
         self.menu_idx = 0
+        # /ask chat sessions (persisted across TUI restarts)
+        self.chat_sessions: list[dict] = self._load_chats()
+        self.chat_idx = max(0, len(self.chat_sessions) - 1)
 
     # ── layout ──────────────────────────────────────────────────────────
 
@@ -507,6 +626,8 @@ class VaultTop(App):
     # ── command deck ────────────────────────────────────────────────────
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "prompt":
+            return  # other screens own their inputs
         line = event.value.strip()
         # Enter with the palette open completes instead of submitting,
         # unless the token already IS the highlighted no-arg command
@@ -551,6 +672,8 @@ class VaultTop(App):
             )
         elif line.startswith("/ask "):
             self.ask_router(line[5:])
+        elif line == "/chats":
+            self.open_chats()
         elif line == "/reset-cloud":
             self.reset_cloud()
         elif line == "/models":
@@ -598,44 +721,91 @@ class VaultTop(App):
         self.active_task = task_id
         self._show_transcript(True)
 
-    @work(thread=True, group="dispatch")
+    # ── /ask chat sessions ──────────────────────────────────────────────
+
+    CHATS_PATH = ROOT / ".tmp/vault-chats.json"
+    CHAT_HISTORY_CAP = 24  # messages sent per turn (context budget)
+
+    def _load_chats(self) -> list[dict]:
+        try:
+            return json.loads(self.CHATS_PATH.read_text())[-20:]
+        except (FileNotFoundError, ValueError):
+            return []
+
+    def _save_chats(self) -> None:
+        try:
+            self.CHATS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self.CHATS_PATH.write_text(json.dumps(self.chat_sessions[-20:]))
+        except OSError:
+            pass
+
     def ask_router(self, prompt: str) -> None:
-        """/ask [gpu] <prompt> — one-shot to the router; first word may pin
-        a card (r9700 / 4060ti / 7900xtx)."""
+        """/ask [gpu] <prompt> — start a NEW chat session and open the
+        session screen; first word may pin a card."""
         lane = None
         parts = prompt.split(None, 1)
         known = {w["gpu"] for w in self.state.get("workers", [])}
         if len(parts) == 2 and parts[0] in known:
             lane, prompt = parts[0], parts[1]
-        self.call_from_thread(
-            self._log_line,
-            Text(f"? {prompt}" + (f"  [→{lane}]" if lane else ""), style=AMBER),
+        self.chat_sessions.append(
+            {"title": prompt[:40], "lane": lane, "messages": []}
         )
+        self.chat_idx = len(self.chat_sessions) - 1
+        if not isinstance(self.screen, ChatScreen):
+            self.push_screen(ChatScreen())
+        self.chat_send(prompt)
+
+    def open_chats(self) -> None:
+        """/chats — reopen the session screen on the latest session."""
+        if not self.chat_sessions:
+            self._log_line(Text("no ask sessions yet — try /ask <prompt>",
+                                style="dim"))
+            return
+        if not isinstance(self.screen, ChatScreen):
+            self.push_screen(ChatScreen())
+
+    def chat_send(self, text: str) -> None:
+        s = self.chat_sessions[self.chat_idx]
+        s["messages"].append({"role": "user", "content": text})
+        if isinstance(self.screen, ChatScreen):
+            self.screen.waiting = True
+            self.screen.redraw()
+        self._chat_complete(self.chat_idx)
+
+    @work(thread=True, group="chat")
+    def _chat_complete(self, idx: int) -> None:
+        s = self.chat_sessions[idx]
+        history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in s["messages"][-self.CHAT_HISTORY_CAP:]
+        ]
         try:
             r = requests.post(
                 f"{self.api}/llm/complete",
                 headers=self.headers,
-                json={"messages": [{"role": "user", "content": prompt}],
-                      "difficulty": "easy", "max_tokens": 1024, "lane": lane},
-                timeout=180,
+                json={"messages": history, "difficulty": "easy",
+                      "max_tokens": 2048, "lane": s.get("lane")},
+                timeout=300,
             )
             if r.status_code == 400:
-                # e.g. "lane 'r9700' is down — start its worker or drop the pin"
-                self.call_from_thread(
-                    self._log_line,
-                    Text(r.json().get("detail", "bad request"), style=RED),
-                )
-                return
-            r.raise_for_status()
-            d = r.json()
-            reply = Text()
-            reply.append(f"[{d['lane']}] ", style=CYAN)
-            reply.append(d["content"].strip())
-            self.call_from_thread(self._log_line, reply)
+                reply = {"role": "assistant", "lane": "error",
+                         "content": r.json().get("detail", "bad request")}
+            else:
+                r.raise_for_status()
+                d = r.json()
+                reply = {"role": "assistant", "lane": d["lane"],
+                         "content": (d.get("content") or "").strip()}
         except requests.RequestException as e:
-            self.call_from_thread(
-                self._log_line, Text(f"ask failed: {e}", style=RED)
-            )
+            reply = {"role": "assistant", "lane": "error",
+                     "content": f"ask failed: {e}"}
+        self.call_from_thread(self._chat_receive, idx, reply)
+
+    def _chat_receive(self, idx: int, reply: dict) -> None:
+        self.chat_sessions[idx]["messages"].append(reply)
+        self._save_chats()
+        if isinstance(self.screen, ChatScreen):
+            self.screen.waiting = False
+            self.screen.redraw()
 
     @work(thread=True, group="dispatch")
     def reset_cloud(self) -> None:
@@ -843,9 +1013,12 @@ class VaultTop(App):
             self.menu_idx = (self.menu_idx + delta) % len(self.menu_items)
             self._render_menu()
             return
-        # priority bindings are app-global: delegate to the drill screen
+        # priority bindings are app-global: delegate to the active screen
         if isinstance(self.screen, TaskScreen):
             self.screen.action_nav(delta)
+            return
+        if isinstance(self.screen, ChatScreen):
+            self.screen.switch_session(delta)
             return
         n = len(self._tasks())
         if n:
@@ -863,6 +1036,11 @@ class VaultTop(App):
         cursor key (priority binding steals it, so re-dispatch manually)."""
         if isinstance(self.screen, TaskScreen):
             self.screen.action_go_right()
+            return
+        if isinstance(self.screen, ChatScreen):
+            chat_prompt = self.screen.query_one("#chat-prompt", Input)
+            if chat_prompt.has_focus and chat_prompt.value:
+                chat_prompt.action_cursor_right()
             return
         prompt = self.query_one("#prompt", Input)
         if prompt.has_focus and prompt.value:
@@ -935,6 +1113,9 @@ class VaultTop(App):
 
     def redraw(self) -> None:
         self.tick += 1
+        # only paint the deck widgets when the deck screen is active
+        if self.screen is not self.screen_stack[0]:
+            return
         self._redraw_orchline()
         s = self.state
         out = Text()
