@@ -20,7 +20,6 @@ interface DeckState {
     activeSlots?: number;
     currentPrompt?: string;
   }[];
-  ollama: { model: string; vramGB: number; totalGB: number; until: string }[];
   throughput: Record<
     string,
     { liveTps: number; hourTokens: number; hourAvgTps: number }
@@ -190,17 +189,6 @@ export default function DeckView({ docked = false }: { docked?: boolean }) {
         );
       })}
 
-      {state.ollama.length > 0 && (
-        <div className="deck-section">
-          <div className="deck-head">OLLAMA RESIDENTS (placement not exposed)</div>
-          {state.ollama.map((m) => (
-            <div key={m.model} className="deck-line">
-              ├─ {m.model} · {m.vramGB}GB vram / {m.totalGB}GB · until{" "}
-              {m.until.slice(11, 19) || "?"}
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="deck-section">
         <div className="deck-head">CLOUD ORCHESTRATOR · ollama.com</div>

@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from obsidian_rag.indexer import OllamaEmbedder, VaultIndexer
+from obsidian_rag.indexer import LMStudioEmbedder, VaultIndexer
 from obsidian_rag.store import VectorStore
 
 from .config import settings
@@ -21,11 +21,14 @@ class RagService:
         self,
         vault_path: Path,
         data_dir: Path,
-        ollama_url: str,
+        embed_url: str,
         embed_model: str,
     ) -> None:
         data_dir.mkdir(parents=True, exist_ok=True)
-        self.embedder = OllamaEmbedder(base_url=ollama_url, model=embed_model)
+        # OpenAI-compatible /v1/embeddings — served by vault-embed
+        # (llama.cpp); same nomic weights + task prefixes as before, so the
+        # existing sqlite-vec index remains valid
+        self.embedder = LMStudioEmbedder(base_url=embed_url, model=embed_model)
         self.store = VectorStore(data_path=str(data_dir))
         self.indexer = VaultIndexer(vault_path=str(vault_path), embedder=self.embedder)
 
@@ -62,6 +65,6 @@ def rag() -> RagService:
     return RagService(
         vault_path=settings.vault_path,
         data_dir=settings.rag_data_dir,
-        ollama_url=settings.ollama_url,
+        embed_url=settings.embed_url,
         embed_model=settings.embed_model,
     )

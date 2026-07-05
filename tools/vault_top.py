@@ -269,6 +269,8 @@ class VaultTop(App):
         ("/ask", "/ask <prompt>",
          "local model router (free tokens; paid fallback if worker down)"),
         ("/models", "/models", "list local GGUFs (size, arch, loadability)"),
+        ("/pull", "/pull <hf-repo> [quant]",
+         "download a GGUF from Hugging Face into ~/llm-models"),
         ("/model", "/model [gpu] <n|name>",
          "switch a card's worker model (sticky across restarts)"),
         ("/cancel", "/cancel", "cancel the active task (same as Esc)"),
@@ -553,6 +555,13 @@ class VaultTop(App):
             self.reset_cloud()
         elif line == "/models":
             self.list_models()
+        elif line.startswith("/pull "):
+            args = line[6:].split()
+            self._dispatch_run(
+                ["uv", "run", "--with", "huggingface_hub", "python3",
+                 str(ROOT / "tools/hf_pull.py"), *args],
+                title=f"hf pull {' '.join(args)[:45]}",
+            )
         elif line.startswith("/model "):
             self.switch_model(line[7:].strip())
         elif line == "/reset-ledger":
@@ -967,11 +976,6 @@ class VaultTop(App):
                     "  └─ no vault worker (display / ollama card)\n",
                     style="dim",
                 )
-        for m in s.get("ollama", []):
-            out.append(
-                f"  ollama · {m['model']} · {m['vramGB']}GB vram\n",
-                style="#cfe8f5",
-            )
         out.append("\nCLOUD ORCHESTRATOR · ollama.com\n", style=f"bold {AMBER}")
         cloud = s.get("cloud", [])
         if not cloud:

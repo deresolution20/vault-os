@@ -401,27 +401,6 @@ async def _worker_state(w: dict) -> dict:
     return state
 
 
-async def _ollama_state() -> list[dict]:
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as c:
-            r = await c.get(f"{settings.ollama_url}/api/ps")
-            r.raise_for_status()
-            models = r.json().get("models", [])
-    except httpx.HTTPError:
-        return []
-    return [
-        {
-            "model": m.get("name"),
-            "vramGB": round(m.get("size_vram", 0) / 1e9, 1),
-            "totalGB": round(m.get("size", 0) / 1e9, 1),
-            "until": m.get("expires_at", ""),
-            # ollama does not expose per-card placement; spans cards when big
-            "placement": "ollama-managed (placement not exposed)",
-        }
-        for m in models
-    ]
-
-
 # ── Plane chain resolution (cached) ──────────────────────────────────────
 
 _plane_cache: dict[str, tuple[float, dict]] = {}
@@ -490,10 +469,7 @@ async def _plane_chain(task_id: str) -> dict:
 async def deck_state() -> dict:
     from vault_api.router import model_router
 
-    workers, ollama = await asyncio.gather(
-        asyncio.gather(*[_worker_state(w) for w in WORKERS]),
-        _ollama_state(),
-    )
+    workers = await asyncio.gather(*[_worker_state(w) for w in WORKERS])
     running = []
     for info in _running.values():
         running.append({**info, "plane": await _plane_chain(info["taskId"])})
@@ -501,7 +477,6 @@ async def deck_state() -> dict:
         "ts": time.time(),
         "gpus": _amd_gpus() + _nvidia_gpus(),
         "workers": list(workers),
-        "ollama": ollama,
         "runningTasks": running,
         "history": _history,
         "ledger": model_router.ledger.as_dict(),
@@ -563,7 +538,9 @@ async def task_detail(task_id: str) -> dict:
 
 # ── model catalog + switcher ─────────────────────────────────────────────
 
-OLLAMA_STORES = [Path("/var/lib/ollama-r9700/models")]
+# ollama stores decommissioned 2026-07-05; ~/llm-models is canonical
+OLLAMA_STORES: list[Path] = []
+LLM_MODELS_DIR = Path.home() / "llm-models"
 # archs the bundled llama.cpp (b9870) cannot load (ollama-fork additions)
 UNSUPPORTED_ARCHS = {"qwen35", "qwen35moe"}
 
@@ -595,6 +572,23 @@ def _model_catalog() -> list[dict]:
     import json
 
     out = []
+    # canonical dir first: plain GGUF files with human names
+    if LLM_MODELS_DIR.is_dir():
+        for gguf in sorted(LLM_MODELS_DIR.glob("*.gguf")):
+            # skip non-first shards of split models (…-00002-of-00003.gguf)
+            stem = gguf.stem
+            if "-of-" in stem and not stem.split("-of-")[0].endswith("00001"):
+                continue
+            arch = _gguf_arch(gguf)
+            out.append(
+                {
+                    "name": stem,
+                    "path": str(gguf),
+                    "sizeGB": round(gguf.stat().st_size / 1e9, 1),
+                    "arch": arch,
+                    "loadable": arch not in UNSUPPORTED_ARCHS,
+                }
+            )
     for store in OLLAMA_STORES:
         manifests_root = store / "manifests"
         if not manifests_root.is_dir():

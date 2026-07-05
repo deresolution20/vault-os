@@ -7,8 +7,8 @@ set -euo pipefail
 
 LLAMA_DIR="${LLAMA_DIR:-$HOME/llm-workers/llama-b9870}"
 PORT="${WORKER_4060TI_PORT:-8082}"
-# default: qwen3:14b q4 (9.3GB) — fits 16GB with display + modest context
-MODEL="${MODEL_4060TI:-/var/lib/ollama-r9700/models/blobs/sha256-a8cc1361f3145dc01f6d77c6c82c9116b9ffe3c97b34716fe20418455876c40e}"
+# default: qwen3-14b q4 (9.3GB) from ~/llm-models
+MODEL="${MODEL_4060TI:-$HOME/llm-models/qwen3-14b-q4_k_m.gguf}"
 ALIAS="${MODEL_4060TI_ALIAS:-qwen3:14b}"
 CTX="${MODEL_4060TI_CTX:-16384}"
 MIN_FREE_GB=10

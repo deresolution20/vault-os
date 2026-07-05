@@ -11,13 +11,10 @@ set -euo pipefail
 
 LLAMA_DIR="${LLAMA_DIR:-$HOME/llm-workers/llama-b9870}"
 PORT="${WORKER_R9700_PORT:-8081}"
-# default model: qwen3 32B q4_K_M GGUF reused from the ollama store
-# (read-only). NOTE: qwen3.6/ornith blobs use ollama-fork archs (qwen35)
-# that upstream llama.cpp can't load — stick to arch=qwen3 models here.
-# Swap via MODEL_R9700 env or projects/vault-os/.env when a dedicated coding
-# model is chosen.
-MODEL="${MODEL_R9700:-/var/lib/ollama-r9700/models/blobs/sha256-a27a92cf139a68efcbb267c6af6d20bb8f3feddc700f3b03cd8d41f4dc443348}"
-ALIAS="${MODEL_R9700_ALIAS:-qwen3-32b}"
+# default model: qwen3-32b-abliterated from ~/llm-models (post-ollama).
+# Swap at runtime with the vault /model command (sticky selection file).
+MODEL="${MODEL_R9700:-$HOME/llm-models/qwen3-32b-abliterated-q4_k_m.gguf}"
+ALIAS="${MODEL_R9700_ALIAS:-qwen3-32b-abliterated}"
 
 # Runtime model switch (gpu-deck /model command) overrides everything:
 # .tmp/worker-r9700.model is JSON {"path": ..., "alias": ...}

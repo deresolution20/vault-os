@@ -21,10 +21,12 @@ class Settings(BaseSettings):
     obsidian_rest_url: str = "http://127.0.0.1:27123"
     obsidian_rest_api_key: str = ""
 
-    # M2.2 RAG — local embeddings only (PRD §3.4)
+    # M2.2 RAG — local embeddings only (PRD §3.4); served by vault-embed
+    # (llama.cpp :8084) since the ollama decommission (2026-07-05)
     rag_data_dir: Path = PROJECT_ROOT / ".tmp/rag"
-    ollama_url: str = "http://localhost:11434"
+    embed_url: str = "http://127.0.0.1:8084"
     embed_model: str = "nomic-embed-text"
+    ollama_url: str = "http://localhost:11434"  # legacy; deck residents only
 
     worker_r9700_url: str = "http://127.0.0.1:8081/v1"
     # interim junior lane on the NVIDIA card until the 7900 XTX arrives

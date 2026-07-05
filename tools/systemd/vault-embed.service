@@ -1,0 +1,14 @@
+# vault-embed — always-on nomic embeddings for the vault RAG (:8084).
+# Tiny (~0.4GB VRAM on the R9700); replaces the local ollama dependency.
+[Unit]
+Description=VAULT embeddings server - nomic via llama.cpp Vulkan (:8084)
+After=network.target
+
+[Service]
+Type=exec
+ExecStart=/bin/bash /home/brice/Claude_Code_Projects/projects/vault-os/tools/run_embed_worker.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
