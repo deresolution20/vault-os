@@ -247,13 +247,16 @@ class ChatScreen(Screen):
     }}
     """
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.waiting = False
-
     @property
     def _app(self) -> "VaultTop":
         return self.app  # type: ignore[return-value]
+
+    @property
+    def waiting(self) -> bool:
+        app = self._app
+        if not app.chat_sessions:
+            return False
+        return bool(app.chat_sessions[app.chat_idx].get("waiting"))
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
@@ -266,8 +269,13 @@ class ChatScreen(Screen):
     def on_mount(self) -> None:
         self.query_one("#chat-list").border_title = "ASK SESSIONS"
         self.query_one("#chat-prompt", Input).focus()
-        # animate the thinking spinner while a reply is pending
-        self.set_interval(0.12, lambda: self.waiting and self.redraw())
+        # animate the thinking spinner while any reply is pending
+        self.set_interval(
+            0.12,
+            lambda: any(
+                s.get("waiting") for s in self._app.chat_sessions
+            ) and self.redraw(),
+        )
         self.redraw()
 
     def action_back(self) -> None:
@@ -306,7 +314,10 @@ class ChatScreen(Screen):
             sel = "❯ " if i == idx else "  "
             style = f"bold {CYAN}" if i == idx else "#cfe8f5"
             lane = f" →{s['lane']}" if s.get("lane") else ""
-            lst.append(f"{sel}{s['title'][:24]}\n", style=style)
+            spin = (
+                f" {SPIN[app.tick % len(SPIN)]}" if s.get("waiting") else ""
+            )
+            lst.append(f"{sel}{s['title'][:24]}{spin}\n", style=style)
             lst.append(
                 f"   {len(s['messages']) // 2} turns{lane}\n", style="dim"
             )
@@ -515,6 +526,11 @@ class VaultTop(App):
         if tid:
             # multiplexed: every agent's events stream in, tagged per task
             self._append_event(e, self._tag(tid))
+        elif e.get("type") == "log" and e.get("level") == "warn":
+            # system announcements (e.g. worker toggles) — always visible
+            self._log_line(
+                Text(f"[{e.get('source')}] {e.get('line', '')}", style=AMBER)
+            )
         if e.get("type") == "task_done":
             if tid == self.active_task:
                 self.active_task = None
@@ -748,7 +764,8 @@ class VaultTop(App):
         if len(parts) == 2 and parts[0] in known:
             lane, prompt = parts[0], parts[1]
         self.chat_sessions.append(
-            {"title": prompt[:40], "lane": lane, "messages": []}
+            {"title": prompt[:40], "lane": lane, "messages": [],
+             "waiting": False}
         )
         self.chat_idx = len(self.chat_sessions) - 1
         if not isinstance(self.screen, ChatScreen):
@@ -767,8 +784,8 @@ class VaultTop(App):
     def chat_send(self, text: str) -> None:
         s = self.chat_sessions[self.chat_idx]
         s["messages"].append({"role": "user", "content": text})
+        s["waiting"] = True
         if isinstance(self.screen, ChatScreen):
-            self.screen.waiting = True
             self.screen.redraw()
         self._chat_complete(self.chat_idx)
 
@@ -802,9 +819,9 @@ class VaultTop(App):
 
     def _chat_receive(self, idx: int, reply: dict) -> None:
         self.chat_sessions[idx]["messages"].append(reply)
+        self.chat_sessions[idx]["waiting"] = False
         self._save_chats()
         if isinstance(self.screen, ChatScreen):
-            self.screen.waiting = False
             self.screen.redraw()
 
     @work(thread=True, group="dispatch")
@@ -1007,6 +1024,12 @@ class VaultTop(App):
             self.state.get("history", [])
         )
 
+    def _selectables(self) -> list[tuple[str, int]]:
+        """Deck cursor targets: chat sessions first, then tasks."""
+        return [("chat", i) for i in range(len(self.chat_sessions))] + [
+            ("task", i) for i in range(len(self._tasks()))
+        ]
+
     def action_move(self, delta: int) -> None:
         # palette open → arrows navigate the menu
         if self.menu_open:
@@ -1020,15 +1043,22 @@ class VaultTop(App):
         if isinstance(self.screen, ChatScreen):
             self.screen.switch_session(delta)
             return
-        n = len(self._tasks())
+        n = len(self._selectables())
         if n:
             self.cursor = (self.cursor + delta) % n
 
     def action_drill(self) -> None:
-        tasks = self._tasks()
-        if tasks:
+        sel = self._selectables()
+        if not sel:
+            return
+        kind, idx = sel[self.cursor % len(sel)]
+        if kind == "chat":
+            self.chat_idx = idx
+            self.push_screen(ChatScreen())
+        else:
+            tasks = self._tasks()
             self.push_screen(
-                TaskScreen([t["taskId"] for t in tasks], self.cursor % len(tasks))
+                TaskScreen([t["taskId"] for t in tasks], idx)
             )
 
     def action_drill_right(self) -> None:
@@ -1185,6 +1215,21 @@ class VaultTop(App):
                 f"{c['avgLatencyMs']}ms\n",
                 style="dim",
             )
+        out.append("\nASK SESSIONS\n", style=f"bold {AMBER}")
+        if not self.chat_sessions:
+            out.append("  none — /ask <prompt> starts one\n", style="dim")
+        for ci, cs in enumerate(self.chat_sessions):
+            sel = "▸" if ci == self.cursor else " "
+            spin = (
+                f" {SPIN[self.tick % len(SPIN)]}" if cs.get("waiting") else ""
+            )
+            lane = f" →{cs['lane']}" if cs.get("lane") else ""
+            out.append(f" {sel}💬 {cs['title'][:44]}{spin}", style="#cfe8f5")
+            out.append(
+                f"  {len(cs['messages']) // 2} turns{lane}\n", style="dim"
+            )
+
+        offset = len(self.chat_sessions)
         out.append("\nRUNNING\n", style=f"bold {AMBER}")
         running = s.get("runningTasks", [])
         if not running:
@@ -1193,7 +1238,7 @@ class VaultTop(App):
         for idx, t in enumerate(running):
             spin = SPIN[self.tick % len(SPIN)]
             age = int(time.time() - t.get("startedAt", time.time()))
-            sel = "▸" if tasks and idx == self.cursor else " "
+            sel = "▸" if tasks and offset + idx == self.cursor else " "
             out.append(
                 f" {sel}{spin} {t['taskId']} {t.get('title', '')} "
                 f"[{t.get('difficulty')} · {t.get('worker')} · {age}s]\n"
@@ -1209,7 +1254,7 @@ class VaultTop(App):
                 out.append(f"    {p.get('reason', 'unplanned')}\n", style="dim")
         out.append("\nHISTORY\n", style=f"bold {AMBER}")
         for j, h in enumerate(s.get("history", [])):
-            idx = len(running) + j
+            idx = offset + len(running) + j
             mark = "✓" if h.get("status") == "success" else "✗"
             style = GREEN if h.get("status") == "success" else RED
             sel = "▸" if tasks and idx == self.cursor else " "

@@ -687,10 +687,25 @@ async def worker_control(unit: str, action: str) -> dict:
     )
     if p.returncode != 0:
         raise HTTPException(500, p.stderr.strip()[:200])
+    # announce on the bus so toggles are always visible in the transcript
+    if _bus is not None:
+        from vault_api.events import LogEvent
+
+        await _bus.emit(
+            LogEvent(
+                ts=time.time(), source=MODULE_ID, level="warn",
+                line=f"⚡ worker {action}: {unit}",
+            )
+        )
     return {"unit": unit, "action": action, "ok": True}
 
 
+_bus: EventBus | None = None
+
+
 def register(registry: ModuleRegistry, bus: EventBus) -> None:
+    global _bus
+    _bus = bus
     _load()
     bus.subscribe(_on_event)
     registry.register(

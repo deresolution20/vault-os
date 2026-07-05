@@ -18,6 +18,9 @@ async def main() -> int:
     app = VaultTop()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause(1.0)
+        # deterministic start: no persisted chat sessions in the cursor list
+        app.chat_sessions.clear()
+        app.cursor = 0
 
         # deck state must have loaded (GPUs present)
         assert app.state.get("gpus"), f"no deck state: {app.state}"
@@ -152,6 +155,18 @@ async def main() -> int:
         await pilot.pause(0.3)
         assert not isinstance(app.screen, ChatScreen), "esc didn't leave chat"
         print("✓ esc returned to deck; session persisted")
+
+        # the session is now selectable on the deck: cursor 0 = the session,
+        # empty-Enter jumps back into it
+        app.cursor = 0
+        kind, idx = app._selectables()[0]
+        assert kind == "chat", f"deck selectable 0 should be the chat: {kind}"
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+        assert isinstance(app.screen, ChatScreen), "deck-select didn't reopen chat"
+        assert len(app.chat_sessions[app.chat_idx]["messages"]) == 4
+        print("✓ deck lists the session; Enter jumps back into it with history")
+        await pilot.press("escape")
     return 0
 
 
