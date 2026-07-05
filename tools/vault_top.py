@@ -356,7 +356,8 @@ class VaultTop(App):
         ("f1", "toggle_worker(0)", "worker 1"),
         ("f2", "toggle_worker(1)", "worker 2"),
         ("f3", "toggle_worker(2)", "worker 3"),
-        ("ctrl+d", "delete_session", "delete session"),
+        # priority: the focused Input would otherwise eat ctrl+d
+        Binding("ctrl+d", "delete_session", "delete session", priority=True),
         ("ctrl+o", "open_issue", "open in Plane"),
         # priority: selection must work even while the prompt Input has focus
         Binding("up", "move(-1)", "select ↑", priority=True),
