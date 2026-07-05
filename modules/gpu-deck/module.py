@@ -596,10 +596,10 @@ def _model_catalog() -> list[dict]:
 
     out = []
     for store in OLLAMA_STORES:
-        manifests = store / "manifests/registry.ollama.ai"
-        if not manifests.is_dir():
+        manifests_root = store / "manifests"
+        if not manifests_root.is_dir():
             continue
-        for mf in manifests.rglob("*"):
+        for mf in manifests_root.rglob("*"):
             if not mf.is_file():
                 continue
             try:
@@ -617,12 +617,16 @@ def _model_catalog() -> list[dict]:
                 blob = store / "blobs" / layer["digest"].replace(":", "-")
                 if not blob.is_file():
                     continue  # cloud model or partial
-                rel = mf.relative_to(manifests).parts
-                name = (
-                    f"{rel[-2]}:{rel[-1]}"
-                    if rel[0] == "library"
-                    else f"{'/'.join(rel[:-1])}:{rel[-1]}"
-                )
+                host, *rel = mf.relative_to(manifests_root).parts
+                # registry.ollama.ai/library/x/tag -> x:tag
+                # registry.ollama.ai/org/x/tag     -> org/x:tag
+                # hf.co/org/repo/tag               -> hf.co/org/repo:tag
+                if host == "registry.ollama.ai" and rel[0] == "library":
+                    rel = rel[1:]
+                base = "/".join(rel[:-1])
+                if host != "registry.ollama.ai":
+                    base = f"{host}/{base}"
+                name = f"{base}:{rel[-1]}"
                 arch = _gguf_arch(blob)
                 out.append(
                     {
