@@ -1,0 +1,55 @@
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: #04060c;
+}
+
+.browser-guard {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  color: #cfe8f5;
+  font-family: "JetBrains Mono", "Fira Mono", monospace;
+}
+
+.browser-guard-panel {
+  width: min(560px, 100%);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(6, 10, 18, 0.96);
+  padding: 28px;
+  box-shadow: 0 0 34px rgba(0, 229, 255, 0.18);
+}
+
+.browser-guard-kicker {
+  color: #ffb347;
+  font-size: 13px;
+  letter-spacing: 0.35em;
+  text-shadow: 0 0 8px rgba(255, 179, 71, 0.35);
+}
+
+.browser-guard h1 {
+  margin: 14px 0 10px;
+  color: #00e5ff;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.browser-guard p {
+  margin: 0 0 18px;
+  line-height: 1.55;
+  color: rgba(207, 232, 245, 0.82);
+}
+
+.browser-guard code {
+  display: block;
+  overflow-x: auto;
+  border-left: 2px solid #00e5ff;
+  background: rgba(0, 229, 255, 0.08);
+  color: #ffb347;
+  padding: 12px 14px;
+}
