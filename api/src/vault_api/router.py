@@ -1,10 +1,10 @@
 """M5.2/M5.3 — model router: local-first lanes by difficulty, paid fallback.
 
 Lanes (PRD §11.5): R9700 = senior (hard/long-context), 7900 XTX = junior
-(trivial/easy parallel). Until the second card lands, all difficulties route
-to whichever local lane is healthy. On local error/timeout/no-lane the
-request escalates to the paid API (Anthropic) and the token ledger records
-the spend so savings are measurable (M5.3 AC).
+(trivial/easy parallel). All difficulties route to whichever active local
+lane is healthy. On local error/timeout/no-lane the request escalates to the
+paid API (Anthropic) and the token ledger records the spend so savings are
+measurable (M5.3 AC).
 
 NEVER add a lane that spans two GPUs (PRD §3.1).
 """
@@ -55,7 +55,6 @@ class ModelRouter:
     def __init__(self) -> None:
         self.lanes = [
             Lane("r9700", settings.worker_r9700_url, tier="senior"),
-            Lane("4060ti", settings.worker_4060ti_url, tier="junior"),
             Lane("7900xtx", settings.worker_7900xtx_url, tier="junior"),
         ]
         self.ledger = TokenLedger()

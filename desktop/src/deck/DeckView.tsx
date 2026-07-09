@@ -16,6 +16,7 @@ interface DeckState {
     gpu: string;
     unit: string;
     up: boolean;
+    selectedModel?: string;
     model?: string;
     activeSlots?: number;
     currentPrompt?: string;
@@ -162,7 +163,7 @@ export default function DeckView({ docked = false }: { docked?: boolean }) {
             )}
             {worker && (
               <div className="deck-line">
-                ├─ vault-worker{" "}
+                ├─ {worker.unit}{" "}
                 {worker.up ? (
                   <>
                     <span className="ok">● up</span> · {worker.model} ·{" "}
@@ -175,7 +176,12 @@ export default function DeckView({ docked = false }: { docked?: boolean }) {
                     )}
                   </>
                 ) : (
-                  <span className="deck-dim">○ down</span>
+                  <>
+                    <span className="deck-dim">○ down</span>
+                    {worker.selectedModel && (
+                      <span className="deck-dim"> · {worker.selectedModel}</span>
+                    )}
+                  </>
                 )}{" "}
                 <button
                   className="deck-btn"

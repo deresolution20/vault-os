@@ -1,11 +1,12 @@
 """M4.4 AC: unauthenticated requests rejected; valid token accepted."""
 
 import pytest
-from fastapi.testclient import TestClient
+
+from conftest import ASGIAppClient
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+async def client(tmp_path, monkeypatch):
     from vault_api import config
 
     vault = tmp_path / "v"
@@ -15,34 +16,42 @@ def client(tmp_path, monkeypatch):
 
     from vault_api.main import app
 
-    with TestClient(app) as c:
+    async with ASGIAppClient(app) as c:
         yield c
 
 
-def test_health_open(client):
-    assert client.get("/health").status_code == 200
+@pytest.mark.asyncio
+async def test_health_open(client):
+    assert (await client.get("/health")).status_code == 200
 
 
-def test_rest_requires_token(client):
-    assert client.get("/graph").status_code == 401
-    assert client.get("/graph", headers={"Authorization": "Bearer wrong"}).status_code == 401
-    assert client.get("/graph", headers={"Authorization": "Bearer sekrit"}).status_code == 200
+@pytest.mark.asyncio
+async def test_rest_requires_token(client):
+    assert (await client.get("/graph")).status_code == 401
+    assert (
+        await client.get("/graph", headers={"Authorization": "Bearer wrong"})
+    ).status_code == 401
+    assert (
+        await client.get("/graph", headers={"Authorization": "Bearer sekrit"})
+    ).status_code == 200
 
 
-def test_ws_requires_token(client):
+@pytest.mark.asyncio
+async def test_ws_requires_token(client):
     from starlette.websockets import WebSocketDisconnect as WsClosed
 
     with pytest.raises(WsClosed):
-        with client.websocket_connect("/ws/events") as ws:
-            ws.receive_json()
+        async with client.websocket_connect("/ws/events") as ws:
+            await ws.receive_json()
 
-    with client.websocket_connect("/ws/events?token=sekrit") as ws:
-        assert ws.receive_json()["type"] == "log"
+    async with client.websocket_connect("/ws/events?token=sekrit") as ws:
+        assert (await ws.receive_json())["type"] == "log"
 
 
-def test_cors_preflight_and_origin(client):
+@pytest.mark.asyncio
+async def test_cors_preflight_and_origin(client):
     """Regression: the webview origin must pass CORS or the graph never loads."""
-    r = client.options(
+    r = await client.options(
         "/graph",
         headers={
             "Origin": "http://localhost:1420",
@@ -52,7 +61,7 @@ def test_cors_preflight_and_origin(client):
     )
     assert r.status_code == 200
     assert r.headers["access-control-allow-origin"] == "http://localhost:1420"
-    r = client.get(
+    r = await client.get(
         "/graph",
         headers={
             "Origin": "http://localhost:1420",

@@ -33,6 +33,7 @@ class FakeRouter(ModelRouter):
 @pytest.mark.asyncio
 async def test_hard_prefers_senior_lane():
     r = FakeRouter({"r9700": True, "7900xtx": True})
+    assert [lane.id for lane in r.lanes] == ["r9700", "7900xtx"]
     assert (await r.pick_lane("hard")).id == "r9700"
     assert (await r.pick_lane("trivial")).id == "7900xtx"
 

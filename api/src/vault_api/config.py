@@ -29,9 +29,9 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"  # legacy; deck residents only
 
     worker_r9700_url: str = "http://127.0.0.1:8081/v1"
-    # interim junior lane on the NVIDIA card until the 7900 XTX arrives
-    worker_4060ti_url: str = "http://127.0.0.1:8082/v1"
-    worker_7900xtx_url: str = "http://127.0.0.1:8083/v1"
+    worker_7900xtx_url: str = "http://127.0.0.1:8082/v1"
+    # Legacy/manual fallback only; not part of normal router/deck presentation.
+    worker_4060ti_url: str = "http://127.0.0.1:8083/v1"
 
     anthropic_api_key: str = ""
 

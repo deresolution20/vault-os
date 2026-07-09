@@ -1,0 +1,14 @@
+# VAULT worker #2 - llama.cpp Vulkan on the AMD Radeon RX 7900 XTX (:8082)
+# Start on demand: systemctl --user start vault-worker-7900xtx
+[Unit]
+Description=VAULT worker #2 - llama.cpp Vulkan on AMD Radeon RX 7900 XTX (:8082)
+After=network.target
+
+[Service]
+Type=exec
+ExecStart=/bin/bash /home/brice/Claude_Code_Projects/projects/vault-os/tools/run_worker_7900xtx.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,7 +1,7 @@
 """Hermes API entrypoint (M4; grows via the module registry, M7)."""
 
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
@@ -64,6 +64,8 @@ async def lifespan(app: FastAPI):
         if mod.on_shutdown:
             await mod.on_shutdown()
     vitals.cancel()
+    with suppress(asyncio.CancelledError):
+        await vitals
     watcher.stop()
 
 
@@ -160,7 +162,7 @@ class CompletionRequest(BaseModel):
     messages: list[dict]
     difficulty: str = "easy"
     max_tokens: int = 1024
-    lane: str | None = None  # pin a specific card (r9700 / 4060ti / 7900xtx)
+    lane: str | None = None  # pin a specific card (r9700 / 7900xtx)
 
 
 @app.post("/llm/complete", dependencies=[auth_required])

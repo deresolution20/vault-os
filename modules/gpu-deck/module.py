@@ -16,6 +16,7 @@ import glob
 import subprocess
 import time
 from pathlib import Path
+from contextlib import suppress
 from dataclasses import dataclass, field
 
 import httpx
@@ -142,8 +143,12 @@ async def _start_sampler() -> None:
 
 
 async def _stop_sampler() -> None:
+    global _sampler_task
     if _sampler_task:
         _sampler_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _sampler_task
+        _sampler_task = None
     _save()  # keep rate windows across restarts
 
 
@@ -324,12 +329,17 @@ def _nvidia_gpus() -> list[dict]:
             capture_output=True,
             text=True,
             timeout=5,
-        ).stdout.strip()
+        )
     except (OSError, subprocess.TimeoutExpired):
         return []
+    if out.returncode != 0:
+        return []
     gpus = []
-    for line in out.splitlines():
-        name, used, total = [x.strip() for x in line.split(",")]
+    for line in out.stdout.strip().splitlines():
+        parts = [x.strip() for x in line.split(",")]
+        if len(parts) != 3:
+            continue
+        name, used, total = parts
         gpus.append(
             {
                 "id": "4060ti" if "4060" in name else name.lower().replace(" ", "-"),
@@ -346,10 +356,8 @@ def _nvidia_gpus() -> list[dict]:
 WORKERS = [
     {"id": "r9700-worker", "gpu": "r9700", "url": settings.worker_r9700_url,
      "unit": "vault-worker-r9700", "defaultModel": "qwen3-32b"},
-    {"id": "4060ti-worker", "gpu": "4060ti", "url": settings.worker_4060ti_url,
-     "unit": "vault-worker-4060ti", "defaultModel": "qwen3:14b"},
     {"id": "7900xtx-worker", "gpu": "7900xtx", "url": settings.worker_7900xtx_url,
-     "unit": "vault-worker-7900xtx", "defaultModel": "(pick with /model)"},
+     "unit": "vault-worker-7900xtx", "defaultModel": "qwen3.6-35b-a3b"},
 ]
 
 
