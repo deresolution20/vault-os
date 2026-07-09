@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import subprocess
 from pathlib import Path
 
@@ -36,3 +37,27 @@ def test_nvidia_gpus_ignores_failed_smi(monkeypatch):
     monkeypatch.setattr(module.subprocess, "run", fake_run)
 
     assert module._nvidia_gpus() == []
+
+
+def test_amd_gpus_use_canonical_worker_ids(monkeypatch):
+    module = load_gpu_deck()
+    vendor = "/sys/class/drm/card0/device/vendor"
+    dev = "/sys/class/drm/card0/device"
+    files = {
+        vendor: "0x1002\n",
+        f"{dev}/device": "0x744c\n",
+        f"{dev}/mem_info_vram_total": "25769803776\n",
+        f"{dev}/mem_info_vram_used": "8589934592\n",
+    }
+
+    monkeypatch.setattr(module.glob, "glob", lambda _pattern: [vendor])
+    monkeypatch.setattr("builtins.open", lambda path, *_args, **_kwargs: io.StringIO(files[path]))
+
+    assert module._amd_gpus() == [
+        {
+            "id": "7900xtx",
+            "name": "AMD 7900 XTX (gfx1100)",
+            "vramUsedGB": 8.6,
+            "vramTotalGB": 25.8,
+        }
+    ]

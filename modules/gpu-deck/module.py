@@ -59,6 +59,10 @@ CLOUD_STATS = PROJECT_ROOT / ".tmp/cloud-proxy-stats.jsonl"
 CLOUD_LIVE = PROJECT_ROOT / ".tmp/cloud-proxy-live.json"
 
 METRIC_TOKENS = "llamacpp:tokens_predicted_total"
+AMD_GPU_IDS = {
+    "0x7551": ("r9700", "AMD R9700 (gfx1201)"),
+    "0x744c": ("7900xtx", "AMD 7900 XTX (gfx1100)"),
+}
 
 
 def _push_sample(lane: str, ts: float, total: float) -> None:
@@ -301,13 +305,13 @@ def _amd_gpus() -> list[dict]:
             used = int(open(f"{dev}/mem_info_vram_used").read())
             # gfx1201 R9700 is 0x7551; extend map as cards arrive
             device_id = open(f"{dev}/device").read().strip()
-            name = {
-                "0x7551": "AMD R9700 (gfx1201)",
-                "0x744c": "AMD 7900 XTX (gfx1100)",
-            }.get(device_id, f"AMD GPU {device_id}")
+            gpu_id, name = AMD_GPU_IDS.get(
+                device_id,
+                (f"amd-{device_id.removeprefix('0x')}", f"AMD GPU {device_id}"),
+            )
             gpus.append(
                 {
-                    "id": name.split()[1].lower(),
+                    "id": gpu_id,
                     "name": name,
                     "vramUsedGB": round(used / 1e9, 1),
                     "vramTotalGB": round(total / 1e9, 1),
