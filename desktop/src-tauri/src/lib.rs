@@ -67,10 +67,14 @@ fn read_note(path: String) -> Result<String, String> {
 /// stays in the app as a startup canary for driver/glvnd regressions (M1.3).
 #[tauri::command]
 fn report_spike(result: String) -> Result<(), String> {
-    let path = std::env::var("SPIKE_RESULT_PATH")
-        .unwrap_or_else(|_| "M1-spike-result.json".to_string());
+    let path = std::env::var_os("SPIKE_RESULT_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| project_root().join(".vault-runtime/M1-spike-result.json"));
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
     std::fs::write(&path, &result).map_err(|e| e.to_string())?;
-    println!("SPIKE_RESULT written to {path}\n{result}");
+    println!("SPIKE_RESULT written to {}\n{result}", path.display());
     if std::env::var("SPIKE_AUTOEXIT").as_deref() == Ok("1") {
         std::thread::spawn(|| {
             std::thread::sleep(std::time::Duration::from_millis(500));

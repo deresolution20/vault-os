@@ -17,6 +17,7 @@ __pycache__/
 
 # indexes & regenerable intermediates
 .tmp/
+.vault-runtime/
 *.sqlite
 *.sqlite-vec
 vault-index.db
